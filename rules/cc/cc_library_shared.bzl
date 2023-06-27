@@ -125,6 +125,7 @@ def cc_library_shared(
         linkopts = linkopts + [
             "-funique-internal-linkage-names",
             "-fprofile-sample-accurate",
+            # profile-sample-use is needed to ensure symbol ordering
             "-fprofile-sample-use=$(location {})".format(fdo_profile_path),
             "-Wl,-mllvm,-no-warn-sample-unused=true",
         ]
