@@ -83,7 +83,6 @@ def get_ninja_actions(*, lunch_target: str, target: str, mnemonic: str):
   )
   return [l for l in ninja_output if mnemonic in l]
 
-
 # %%
 # Example 1: Comparing link actions
 # This example gets all of the "CppLink" actions from the adb_test module, and
@@ -155,16 +154,16 @@ ninja_action = commands.expand_rsp(ninja_action)
 bzl_rich_commands = difftool.rich_command_info(" ".join(bazel_action))
 ninja_rich_commands = difftool.rich_command_info(" ".join(ninja_action))
 
-print("Bazel args:")
+print("\nBazel args:")
 print(" \\\n\t".join([bzl_rich_commands.tool] + bzl_rich_commands.args))
-print("Soong args:")
+print("\nSoong args:")
 print(" \\\n\t".join([ninja_rich_commands.tool] + ninja_rich_commands.args))
 
 bzl_only = bzl_rich_commands.compare(ninja_rich_commands)
 soong_only = ninja_rich_commands.compare(bzl_rich_commands)
-print("In Bazel, not Soong:")
+print("\nIn Bazel, not Soong:")
 print(bzl_only)
-print("In Soong, not Bazel:")
+print("\nIn Soong, not Bazel:")
 print(soong_only)
 
 # %%

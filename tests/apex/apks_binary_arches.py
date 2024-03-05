@@ -26,7 +26,6 @@ def main():
     parser.add_argument('--deapexer-path', required=True)
     parser.add_argument('--readelf-path', required=True)
     parser.add_argument('--debugfs-path', required=True)
-    parser.add_argument('--blkid-path', required=True)
     parser.add_argument('--fsckerofs-path', required=True)
     parser.add_argument('apks')
     parser.add_argument('output')
@@ -42,8 +41,6 @@ def main():
                 args.deapexer_path,
                 '--debugfs_path',
                 args.debugfs_path,
-                '--blkid_path',
-                args.blkid_path,
                 '--fsckerofs_path',
                 args.fsckerofs_path,
                 'extract',

@@ -16,20 +16,23 @@ function report {
   set +x
   # check if FAILED_PRODUCTS is not empty
   if (( ${#FAILED_PRODUCTS[@]} )); then
-    printf "Failed products:\n"
-    printf '%s\n' "${FAILED_PRODUCTS[@]}"
-
-    # TODO(b/262192655): Support riscv64 products in Bazel.
-    # TODO(b/261023967): Don't fail the build until every product is OK and we want to prevent backsliding.
-    # exit 1
+    printf "Failed products:\n" >&2
+    printf '%s\n' "${FAILED_PRODUCTS[@]}" >&2
   fi
   if (( ${#PRODUCTS_WITH_BP2BUILD_DIFFS[@]} )); then
-    printf "\n\nProducts that produced different bp2build files from aosp_arm64:\n"
-    printf '%s\n' "${PRODUCTS_WITH_BP2BUILD_DIFFS[@]}"
+    printf "\n\nProducts that produced different bp2build files from aosp_arm64:\n" >&2
+    printf '%s\n' "${PRODUCTS_WITH_BP2BUILD_DIFFS[@]}" >&2
 
     # TODO(b/261023967): Don't fail the build until every product is OK and we want to prevent backsliding.
     # exit 1
   fi
+
+  # TODO(b/262192655): Support riscv64 products in Bazel.
+  for product in "${FAILED_PRODUCTS[@]}"; do
+    if [[ "$product" != *"riscv64"* ]]; then
+      exit 1
+    fi
+  done
 }
 
 trap report EXIT

@@ -20,7 +20,12 @@
 # tests, though may also be used for manual developer verification.
 
 STARTUP_FLAGS=(
-  --max_idle_secs=5
+  # Keep the Bazel server alive, package cache hot and reduce excessive I/O
+  # and wall time by ensuring that max_idle_secs is longer than bp2build which
+  # runs in every loop. bp2build takes ~20 seconds to run, so set this to a
+  # minute to account for resource contention, but still ensure that the bazel
+  # server doesn't stick around after.
+  --max_idle_secs=60
 )
 
 # Before you add flags to this list, cosnider adding it to the "ci" bazelrc
@@ -40,9 +45,10 @@ function build_for_device() {
   ###########
   product_prefix="aosp_"
   for arch in arm arm64 x86 x86_64; do
-    # Re-run product config and bp2build for every TARGET_PRODUCT.
+    # Re-run product config and bp2build for every TARGET_PRODUCT. This is
+    # necessary as long as bp2build workspaces are not product independent.
     product=${product_prefix}${arch}
-    "${AOSP_ROOT}/build/soong/soong_ui.bash" --make-mode BP2BUILD_VERBOSE=1 TARGET_PRODUCT=${product} --skip-soong-tests bp2build dist
+    "${SOURCE_ROOT}/build/soong/soong_ui.bash" --make-mode BP2BUILD_VERBOSE=1 TARGET_PRODUCT=${product} --skip-soong-tests bp2build dist
     # Remove the ninja_build output marker file to communicate to buildbot that this is not a regular Ninja build, and its
     # output should not be parsed as such.
     rm -f out/ninja_build
@@ -85,11 +91,13 @@ function build_for_device() {
   done
 }
 
-function build_for_host() {
+function build_and_test_for_host() {
   targets=("$@")
   # We can safely build and test all targets on the host linux config, and rely on
   # incompatible target skipping for tests that cannot run on the host.
   build/bazel/bin/bazel \
-    "${STARTUP_FLAGS[@]}" test ${FLAGS[@]} --build_tests_only=false \
+    "${STARTUP_FLAGS[@]}" test ${FLAGS[@]} \
+    --build_tests_only=false \
+    --test_lang_filters=-tradefed_device_driven,-tradefed_host_driven_device,-tradefed_deviceless \
     -- ${targets[@]}
 }

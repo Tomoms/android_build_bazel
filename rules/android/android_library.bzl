@@ -14,21 +14,25 @@
 
 """android_library rule."""
 
-load("//build/bazel/rules/java:sdk_transition.bzl", "sdk_transition", "sdk_transition_attrs")
+load("@rules_android//rules:providers.bzl", "StarlarkAndroidResourcesInfo")
 load(
     "//build/bazel/rules/android/android_library_aosp_internal:rule.bzl",
     "android_library_aosp_internal_macro",
 )
-load("@rules_android//rules:providers.bzl", "StarlarkAndroidResourcesInfo")
+load("//build/bazel/rules/java:sdk_transition.bzl", "sdk_transition_attrs")
+load("//build/bazel/rules/kotlin:kt_jvm_library.bzl", "make_kt_compiler_opt")
 
 # TODO(b/277801336): document these attributes.
 def android_library(
         name,
         sdk_version = None,
+        errorprone_force_enable = None,
+        javacopts = [],
         java_version = None,
         tags = [],
         target_compatible_with = [],
         visibility = None,
+        kotlincflags = None,
         **attrs):
     """ android_library macro wrapper that handles custom attrs needed in AOSP
 
@@ -36,17 +40,30 @@ def android_library(
       name: the wrapper rule name.
       sdk_version: string representing which sdk_version to build against. See
       //build/bazel/rules/common/sdk_version.bzl for formatting and semantics.
+      errorprone_force_enable: set this to true to always run Error Prone
+      on this target (overriding the value of environment variable
+      RUN_ERROR_PRONE). Error Prone can be force disabled for an individual
+      module by adding the "-XepDisableAllChecks" flag to javacopts
       java_version: string representing which version of java the java code in this rule should be
       built with.
       tags, target_compatible_with and visibility have Bazel's traditional semantics.
       **attrs: Rule attributes
     """
     lib_name = name + "_private"
+    custom_kotlincopts = make_kt_compiler_opt(name, kotlincflags)
+
+    opts = javacopts
+    if errorprone_force_enable == None:
+        # TODO (b/227504307) temporarily disable errorprone until environment variable is handled
+        opts = opts + ["-XepDisableAllChecks"]
+
     android_library_aosp_internal_macro(
         name = lib_name,
+        javacopts = opts,
         tags = tags + ["manual"],
         target_compatible_with = target_compatible_with,
         visibility = ["//visibility:private"],
+        custom_kotlincopts = custom_kotlincopts,
         **attrs
     )
 
@@ -82,6 +99,7 @@ def _android_library_sdk_transition_impl(ctx):
             ctx.attr.exports[0][StarlarkAndroidResourcesInfo],
             ctx.attr.exports[0][AndroidLibraryResourceClassJarProvider],
             ctx.attr.exports[0][AndroidIdlInfo],
+            ctx.attr.exports[0][BaselineProfileProvider],
             ctx.attr.exports[0][DataBindingV2Info],
             ctx.attr.exports[0][JavaInfo],
             ctx.attr.exports[0][ProguardSpecProvider],

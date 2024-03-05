@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@bazel_skylib//lib:paths.bzl", "paths")
-load(":installable_info.bzl", "InstallableInfo", "installable_aspect")
+"""This file defines the rule that builds android partitions."""
 
-# TODO(b/249685973): Reenable the partition rule
-product_config = {}
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("//build/bazel/rules:build_fingerprint.bzl", "BuildFingerprintInfo")
 
 _IMAGE_TYPES = [
     "system",
@@ -32,251 +31,12 @@ _IMAGE_TYPES = [
     "oem",
 ]
 
-def _p(varname, default = ""):
-    return product_config.get(varname, default)
-
-def _add_common_flags_to_image_props(image_props, image_type):
-    image_props[image_type + "_selinux_fc"] = _p("SELINUX_FC", "")
-    image_props["building_" + image_type + "_image"] = _p("BUILDING_" + image_type.upper() + "_IMAGE", "")
-
-def _add_common_ro_flags_to_image_props(image_props, image_type):
-    image_type = image_type.lower()
-    IMAGE_TYPE = image_type.upper()
-
-    def add_board_var(varname, finalname = None):
-        if not finalname:
-            finalname = varname
-        if _p("BOARD_" + IMAGE_TYPE + "IMAGE_" + varname.upper()):
-            image_props[image_type + "_" + finalname.lower()] = _p("BOARD_" + IMAGE_TYPE + "IMAGE_" + varname.upper())
-
-    add_board_var("EROFS_COMPRESSOR")
-    add_board_var("EROFS_COMPRESS_HINTS")
-    add_board_var("EROFS_PCLUSTER_SIZE")
-    add_board_var("EXTFS_INODE_COUNT")
-    add_board_var("EXTFS_RSV_PCT")
-    add_board_var("F2FS_SLOAD_COMPRESS_FLAGS", "f2fs_sldc_flags")
-    add_board_var("FILE_SYSTEM_COMPRESS", "f2fs_compress")
-    add_board_var("FILE_SYSTEM_TYPE", "fs_type")
-    add_board_var("JOURNAL_SIZE", "journal_size")
-    add_board_var("PARTITION_RESERVED_SIZE", "reserved_size")
-    add_board_var("PARTITION_SIZE", "size")
-    add_board_var("SQUASHFS_BLOCK_SIZE")
-    add_board_var("SQUASHFS_COMPRESSOR")
-    add_board_var("SQUASHFS_COMPRESSOR_OPT")
-    add_board_var("SQUASHFS_DISABLE_4K_ALIGN")
-    if _p("PRODUCT_" + IMAGE_TYPE + "_BASE_FS_PATH"):
-        image_props[image_type + "_base_fs_file"] = _p("PRODUCT_" + IMAGE_TYPE + "_BASE_FS_PATH")
-
-    if not (_p("BOARD_" + IMAGE_TYPE + "IMAGE_PARTITION_SIZE") or
-            _p("BOARD_" + IMAGE_TYPE + "IMAGE_PARTITION_RESERVED_SIZE") or
-            _p("PRODUCT_" + IMAGE_TYPE + "_HEADROOM")):
-        image_props[image_type + "_disable_sparse"] = "true"
-
-    _add_common_flags_to_image_props(image_props, image_type)
-
-def _generate_image_prop_dictionary(ctx, image_types, extra_props = {}):
-    """Generates the image properties file.
-
-    Args:
-      file: The file that will be written to
-      types: A list of one or more of "system", "system_other",
-             "userdata", "cache", "vendor", "product", "system_ext",
-             "odm", "vendor_dlkm", "system_dlkm", or "oem"
-      extra_props: A dictionary of props to append at the end of the file.
-    """
-    # TODO(b/237106430): This should probably be mostly replaced with attributes on the system_image rule,
-    # and then there can be a separate macro to adapt product config variables to a
-    # correctly-spec'd system_image rule.
-
-    toolchain = ctx.toolchains[":partition_toolchain_type"].toolchain_info
-
-    for image_type in image_types:
-        if image_type not in _IMAGE_TYPES:
-            fail("Image type %s unknown. Valid types are %s", image_type, _IMAGE_TYPES)
-    image_props = {}
-
-    if "system" in image_types:
-        if _p("INTERNAL_SYSTEM_OTHER_PARTITION_SIZE"):
-            image_props["system_other_size"] = _p("INTERNAL_SYSTEM_OTHER_PARTITION_SIZE")
-        if _p("PRODUCT_SYSTEM_HEADROOM"):
-            image_props["system_headroom"] = _p("PRODUCT_SYSTEM_HEADROOM")
-        _add_common_ro_flags_to_image_props(image_props, "system")
-    if "system_other" in image_types:
-        image_props["building_system_other_image"] = _p("BUILDING_SYSTEM_OTHER_IMAGE", "")
-        if _p("INTERNAL_SYSTEM_OTHER_PARTITION_SIZE"):
-            image_props["system_other_disable_sparse"] = "true"
-    if "userdata" in image_types:
-        if _p("PRODUCT_FS_CASEFOLD"):
-            image_props["needs_casefold"] = _p("PRODUCT_FS_CASEFOLD")
-        if _p("PRODUCT_QUOTA_PROJID"):
-            image_props["needs_projid"] = _p("PRODUCT_QUOTA_PROJID")
-        if _p("PRODUCT_FS_COMPRESSION"):
-            image_props["needs_compress"] = _p("PRODUCT_FS_COMPRESSION")
-        _add_common_ro_flags_to_image_props(image_props, "userdata")
-    if "cache" in image_types:
-        _add_common_ro_flags_to_image_props(image_props, "cache")
-    if "vendor" in image_types:
-        _add_common_ro_flags_to_image_props(image_props, "vendor")
-    if "product" in image_types:
-        _add_common_ro_flags_to_image_props(image_props, "product")
-    if "system_ext" in image_types:
-        _add_common_ro_flags_to_image_props(image_props, "system_ext")
-    if "odm" in image_types:
-        _add_common_ro_flags_to_image_props(image_props, "odm")
-    if "vendor_dlkm" in image_types:
-        _add_common_ro_flags_to_image_props(image_props, "vendor_dlkm")
-    if "odm_dlkm" in image_types:
-        _add_common_ro_flags_to_image_props(image_props, "odm_dlkm")
-    if "system_dlkm" in image_types:
-        _add_common_ro_flags_to_image_props(image_props, "system_dlkm")
-    if "oem" in image_types:
-        if _p("BOARD_OEMIMAGE_EXTFS_INODE_COUNT"):
-            image_props["oem_extfs_inode_count"] = _p("BOARD_OEMIMAGE_EXTFS_INODE_COUNT")
-        if _p("BOARD_OEMIMAGE_EXTFS_RSV_PCT"):
-            image_props["oem_extfs_rsv_pct"] = _p("BOARD_OEMIMAGE_EXTFS_RSV_PCT")
-        _add_common_ro_flags_to_image_props(image_props, "oem")
-    image_props["ext_mkuserimg"] = toolchain.mkuserimg_mke2fs.path  #_p("MKEXTUSRIMG")
-
-    if _p("TARGET_USERIMAGES_USE_EXT2") == "true":
-        image_props["fs_type"] = "ext2"
-    elif _p("TARGET_USERIMAGES_USE_EXT3") == "true":
-        image_props["fs_type"] = "ext3"
-    elif _p("TARGET_USERIMAGES_USE_EXT4") == "true":
-        image_props["fs_type"] = "ext4"
-
-    if _p("TARGET_USERIMAGES_SPARSE_EXT_DISABLED") != "true":
-        image_props["extfs_sparse_flag"] = "-s"
-    if _p("TARGET_USERIMAGES_SPARSE_EROFS_DISABLED") != "true":
-        image_props["erofs_sparse_flag"] = "-s"
-    if _p("TARGET_USERIMAGES_SPARSE_SQUASHFS_DISABLED") != "true":
-        image_props["squashfs_sparse_flag"] = "-s"
-    if _p("TARGET_USERIMAGES_SPARSE_F2FS_DISABLED") != "true":
-        image_props["f2fs_sparse_flag"] = "-S"
-    if _p("BOARD_EROFS_COMPRESSOR"):
-        image_props["erofs_default_compressor"] = _p("BOARD_EROFS_COMPRESSOR")
-    if _p("BOARD_EROFS_COMPRESS_HINTS"):
-        image_props["erofs_default_compress_hints"] = _p("BOARD_EROFS_COMPRESS_HINTS")
-    if _p("BOARD_EROFS_PCLUSTER_SIZE"):
-        image_props["erofs_pcluster_size"] = _p("BOARD_EROFS_PCLUSTER_SIZE")
-    if _p("BOARD_EROFS_SHARE_DUP_BLOCKS"):
-        image_props["erofs_share_dup_blocks"] = _p("BOARD_EROFS_SHARE_DUP_BLOCKS")
-    if _p("BOARD_EROFS_USE_LEGACY_COMPRESSION"):
-        image_props["erofs_use_legacy_compression"] = _p("BOARD_EROFS_USE_LEGACY_COMPRESSION")
-    if _p("BOARD_EXT4_SHARE_DUP_BLOCKS"):
-        image_props["ext4_share_dup_blocks"] = _p("BOARD_EXT4_SHARE_DUP_BLOCKS")
-    if _p("BOARD_FLASH_LOGICAL_BLOCK_SIZE"):
-        image_props["flash_logical_block_size"] = _p("BOARD_FLASH_LOGICAL_BLOCK_SIZE")
-    if _p("BOARD_FLASH_ERASE_BLOCK_SIZE"):
-        image_props["flash_erase_block_size"] = _p("BOARD_FLASH_ERASE_BLOCK_SIZE")
-    if _p("PRODUCT_SUPPORTS_BOOT_SIGNER"):
-        image_props["boot_signer"] = _p("PRODUCT_SUPPORTS_BOOT_SIGNER")
-    if _p("PRODUCT_SUPPORTS_VERITY"):
-        image_props["verity"] = _p("PRODUCT_SUPPORTS_VERITY")
-        image_props["verity_key"] = _p("PRODUCT_VERITY_SIGNING_KEY")
-        image_props["verity_signer_cmd"] = paths.basename(_p("VERITY_SIGNER"))
-    if _p("PRODUCT_SUPPORTS_VERITY_FEC"):
-        image_props["verity_fec"] = _p("PRODUCT_SUPPORTS_VERITY_FEC")
-    if _p("TARGET_BUILD_VARIANT") == "eng":
-        image_props["verity_disable"] = "true"
-    if _p("PRODUCT_SYSTEM_VERITY_PARTITION"):
-        image_props["system_verity_block_device"] = _p("PRODUCT_SYSTEM_VERITY_PARTITION")
-    if _p("PRODUCT_VENDOR_VERITY_PARTITION"):
-        image_props["vendor_verity_block_device"] = _p("PRODUCT_VENDOR_VERITY_PARTITION")
-    if _p("PRODUCT_PRODUCT_VERITY_PARTITION"):
-        image_props["product_verity_block_device"] = _p("PRODUCT_PRODUCT_VERITY_PARTITION")
-    if _p("PRODUCT_SYSTEM_EXT_VERITY_PARTITION"):
-        image_props["system_ext_verity_block_device"] = _p("PRODUCT_SYSTEM_EXT_VERITY_PARTITION")
-    if _p("PRODUCT_VENDOR_DLKM_VERITY_PARTITION"):
-        image_props["vendor_dlkm_verity_block_device"] = _p("PRODUCT_VENDOR_DLKM_VERITY_PARTITION")
-    if _p("PRODUCT_ODM_DLKM_VERITY_PARTITION"):
-        image_props["odm_dlkm_verity_block_device"] = _p("PRODUCT_ODM_DLKM_VERITY_PARTITION")
-    if _p("PRODUCT_SYSTEM_DLKM_VERITY_PARTITION"):
-        image_props["system_dlkm_verity_block_device"] = _p("PRODUCT_SYSTEM_DLKM_VERITY_PARTITION")
-    if _p("PRODUCT_SUPPORTS_VBOOT"):
-        image_props["vboot"] = _p("PRODUCT_SUPPORTS_VBOOT")
-        image_props["vboot_key"] = _p("PRODUCT_VBOOT_SIGNING_KEY")
-        image_props["vboot_subkey"] = _p("PRODUCT_VBOOT_SIGNING_SUBKEY")
-        image_props["futility"] = paths.basename(_p("FUTILITY"))
-        image_props["vboot_signer_cmd"] = _p("VBOOT_SIGNER")
-
-    # TODO(b/237106430): Avb code is commented out because it's not yet functional
-    # if _p("BOARD_AVB_ENABLE"):
-    #     image_props["avb_avbtool"] = paths.basename(_p("AVBTOOL"))
-    #     image_props["avb_system_hashtree_enable"] = _p("BOARD_AVB_ENABLE")
-    #     image_props["avb_system_add_hashtree_footer_args"] = _p("BOARD_AVB_SYSTEM_ADD_HASHTREE_FOOTER_ARGS")
-    #     if _p("BOARD_AVB_SYSTEM_KEY_PATH"):
-    #         image_props["avb_system_key_path"] = _p("BOARD_AVB_SYSTEM_KEY_PATH")
-    #         image_props["avb_system_algorithm"] = _p("BOARD_AVB_SYSTEM_ALGORITHM")
-    #         image_props["avb_system_rollback_index_location"] = _p("BOARD_AVB_SYSTEM_ROLLBACK_INDEX_LOCATION")
-    #     image_props["avb_system_other_hashtree_enable"] = _p("BOARD_AVB_ENABLE")
-    #     image_props["avb_system_other_add_hashtree_footer_args"] = _p("BOARD_AVB_SYSTEM_OTHER_ADD_HASHTREE_FOOTER_ARGS")
-    #     if _p("BOARD_AVB_SYSTEM_OTHER_KEY_PATH"):
-    #         image_props["avb_system_other_key_path"] = _p("BOARD_AVB_SYSTEM_OTHER_KEY_PATH")
-    #         image_props["avb_system_other_algorithm"] = _p("BOARD_AVB_SYSTEM_OTHER_ALGORITHM")
-    #     image_props["avb_vendor_hashtree_enable"] = _p("BOARD_AVB_ENABLE")
-    #     image_props["avb_vendor_add_hashtree_footer_args"] = _p("BOARD_AVB_VENDOR_ADD_HASHTREE_FOOTER_ARGS")
-    #     if _p("BOARD_AVB_VENDOR_KEY_PATH"):
-    #         image_props["avb_vendor_key_path"] = _p("BOARD_AVB_VENDOR_KEY_PATH")
-    #         image_props["avb_vendor_algorithm"] = _p("BOARD_AVB_VENDOR_ALGORITHM")
-    #         image_props["avb_vendor_rollback_index_location"] = _p("BOARD_AVB_VENDOR_ROLLBACK_INDEX_LOCATION")
-    #     image_props["avb_product_hashtree_enable"] = _p("BOARD_AVB_ENABLE")
-    #     image_props["avb_product_add_hashtree_footer_args"] = _p("BOARD_AVB_PRODUCT_ADD_HASHTREE_FOOTER_ARGS")
-    #     if _p("BOARD_AVB_PRODUCT_KEY_PATH"):
-    #         image_props["avb_product_key_path"] = _p("BOARD_AVB_PRODUCT_KEY_PATH")
-    #         image_props["avb_product_algorithm"] = _p("BOARD_AVB_PRODUCT_ALGORITHM")
-    #         image_props["avb_product_rollback_index_location"] = _p("BOARD_AVB_PRODUCT_ROLLBACK_INDEX_LOCATION")
-    #     image_props["avb_system_ext_hashtree_enable"] = _p("BOARD_AVB_ENABLE")
-    #     image_props["avb_system_ext_add_hashtree_footer_args"] = _p("BOARD_AVB_SYSTEM_EXT_ADD_HASHTREE_FOOTER_ARGS")
-    #     if _p("BOARD_AVB_SYSTEM_EXT_KEY_PATH"):
-    #         image_props["avb_system_ext_key_path"] = _p("BOARD_AVB_SYSTEM_EXT_KEY_PATH")
-    #         image_props["avb_system_ext_algorithm"] = _p("BOARD_AVB_SYSTEM_EXT_ALGORITHM")
-    #         image_props["avb_system_ext_rollback_index_location"] = _p("BOARD_AVB_SYSTEM_EXT_ROLLBACK_INDEX_LOCATION")
-    #     image_props["avb_odm_hashtree_enable"] = _p("BOARD_AVB_ENABLE")
-    #     image_props["avb_odm_add_hashtree_footer_args"] = _p("BOARD_AVB_ODM_ADD_HASHTREE_FOOTER_ARGS")
-    #     if _p("BOARD_AVB_ODM_KEY_PATH"):
-    #         image_props["avb_odm_key_path"] = _p("BOARD_AVB_ODM_KEY_PATH")
-    #         image_props["avb_odm_algorithm"] = _p("BOARD_AVB_ODM_ALGORITHM")
-    #         image_props["avb_odm_rollback_index_location"] = _p("BOARD_AVB_ODM_ROLLBACK_INDEX_LOCATION")
-    #     image_props["avb_vendor_dlkm_hashtree_enable"] = _p("BOARD_AVB_ENABLE")
-    #     image_props["avb_vendor_dlkm_add_hashtree_footer_args"] = _p("BOARD_AVB_VENDOR_DLKM_ADD_HASHTREE_FOOTER_ARGS")
-    #     if _p("BOARD_AVB_VENDOR_DLKM_KEY_PATH"):
-    #         image_props["avb_vendor_dlkm_key_path"] = _p("BOARD_AVB_VENDOR_DLKM_KEY_PATH")
-    #         image_props["avb_vendor_dlkm_algorithm"] = _p("BOARD_AVB_VENDOR_DLKM_ALGORITHM")
-    #         image_props["avb_vendor_dlkm_rollback_index_location"] = _p("BOARD_AVB_VENDOR_DLKM_ROLLBACK_INDEX_LOCATION")
-    #     image_props["avb_odm_dlkm_hashtree_enable"] = _p("BOARD_AVB_ENABLE")
-    #     image_props["avb_odm_dlkm_add_hashtree_footer_args"] = _p("BOARD_AVB_ODM_DLKM_ADD_HASHTREE_FOOTER_ARGS")
-    #     if _p("BOARD_AVB_ODM_DLKM_KEY_PATH"):
-    #         image_props["avb_odm_dlkm_key_path"] = _p("BOARD_AVB_ODM_DLKM_KEY_PATH")
-    #         image_props["avb_odm_dlkm_algorithm"] = _p("BOARD_AVB_ODM_DLKM_ALGORITHM")
-    #         image_props["avb_odm_dlkm_rollback_index_location"] = _p("BOARD_AVB_ODM_DLKM_ROLLBACK_INDEX_LOCATION")
-    #     image_props["avb_system_dlkm_hashtree_enable"] = _p("BOARD_AVB_ENABLE")
-    #     image_props["avb_system_dlkm_add_hashtree_footer_args"] = _p("BOARD_AVB_SYSTEM_DLKM_ADD_HASHTREE_FOOTER_ARGS")
-    #     if _p("BOARD_AVB_SYSTEM_DLKM_KEY_PATH"):
-    #         image_props["avb_system_dlkm_key_path"] = _p("BOARD_AVB_SYSTEM_DLKM_KEY_PATH")
-    #         image_props["avb_system_dlkm_algorithm"] = _p("BOARD_AVB_SYSTEM_DLKM_ALGORITHM")
-    #         image_props["avb_system_dlkm_rollback_index_location"] = _p("BOARD_SYSTEM_SYSTEM_DLKM_ROLLBACK_INDEX_LOCATION")
-    if _p("BOARD_USES_RECOVERY_AS_BOOT") == "true":
-        image_props["recovery_as_boot"] = "true"
-    if _p("BOARD_BUILD_GKI_BOOT_IMAGE_WITHOUT_RAMDISK") == "true":
-        image_props["gki_boot_image_without_ramdisk"] = "true"
-
-    #image_props["root_dir"] = _p("TARGET_ROOT_OUT") # TODO: replace with actual path
-    if _p("PRODUCT_USE_DYNAMIC_PARTITION_SIZE") == "true":
-        image_props["use_dynamic_partition_size"] = "true"
-    for k, v in extra_props.items():
-        image_props[k] = v
-
-    result = "\n".join([k + "=" + v for k, v in image_props.items()])
-    if result:
-        result += "\n"
-    return result
-
-def get_python3(ctx):
+def _get_python3(ctx):
     python_interpreter = ctx.toolchains["@bazel_tools//tools/python:toolchain_type"].py3_runtime.interpreter
     if python_interpreter.basename == "python3":
         return python_interpreter
 
-    renamed = ctx.actions.declare_file("python3")
+    renamed = ctx.actions.declare_file(ctx.attr.name + "/python3")
     ctx.actions.symlink(
         output = renamed,
         target_file = python_interpreter,
@@ -289,55 +49,160 @@ def _partition_impl(ctx):
         fail("currently only system images are supported")
 
     toolchain = ctx.toolchains[":partition_toolchain_type"].toolchain_info
-    python_interpreter = get_python3(ctx)
+    python_interpreter = _get_python3(ctx)
+
+    du = ctx.actions.declare_file(ctx.attr.name + "/du")
+    ctx.actions.symlink(
+        output = du,
+        target_file = toolchain.toybox[DefaultInfo].files_to_run.executable,
+        is_executable = True,
+    )
+    find = ctx.actions.declare_file(ctx.attr.name + "/find")
+    ctx.actions.symlink(
+        output = find,
+        target_file = toolchain.toybox[DefaultInfo].files_to_run.executable,
+        is_executable = True,
+    )
 
     # build_image requires that the output file be named specifically <type>.img, so
     # put all the outputs under a name-qualified folder.
-    image_info = ctx.actions.declare_file(ctx.attr.name + "/image_info.txt")
     output_image = ctx.actions.declare_file(ctx.attr.name + "/" + ctx.attr.type + ".img")
-    ctx.actions.write(image_info, _generate_image_prop_dictionary(ctx, [ctx.attr.type], {"skip_fsck": "true"}))
 
+    # TODO(b/297269187) Fill this out with the contents of ctx.attr.deps
     files = {}
-    for dep in ctx.attr.deps:
-        files.update(dep[InstallableInfo].files)
 
-    for v in files.keys():
-        if not v.startswith("/system"):
-            fail("Files outside of /system are not currently supported: %s", v)
+    staging_dir_builder_options = {
+        "file_mapping": {k: v.path for k, v in files.items()},
+    }
 
-    file_mapping_file = ctx.actions.declare_file(ctx.attr.name + "/partition_file_mapping.json")
+    extra_inputs = []
+    if ctx.attr.base_staging_dir:
+        staging_dir_builder_options["base_staging_dir"] = ctx.file.base_staging_dir.path
+        extra_inputs.append(ctx.file.base_staging_dir)
+        bbipi = ctx.attr._build_broken_incorrect_partition_images[BuildSettingInfo].value
+        if ctx.attr.base_staging_dir_file_list and not bbipi:
+            staging_dir_builder_options["base_staging_dir_file_list"] = ctx.file.base_staging_dir_file_list.path
+            extra_inputs.append(ctx.file.base_staging_dir_file_list)
 
-    # It seems build_image will prepend /system to the paths when building_system_image=true
-    ctx.actions.write(file_mapping_file, json.encode({k.removeprefix("/system"): v.path for k, v in files.items()}))
+    if "{BUILD_NUMBER}" in ctx.attr.image_properties:
+        fail("Can't have {BUILD_NUMBER} in image_properties")
+    for line in ctx.attr.image_properties.splitlines():
+        if line.startswith("avb_"):
+            fail("avb properties should be managed by their bespoke attributes: " + line)
 
-    staging_dir = ctx.actions.declare_directory(ctx.attr.name + "_staging_dir")
+    image_info_contents = ctx.attr.image_properties + "\n\n"
+    image_info_contents += "ext_mkuserimg=mkuserimg_mke2fs\n"
+    if ctx.attr.root_dir:
+        extra_inputs.append(ctx.file.root_dir)
+        image_info_contents += "root_dir=" + ctx.file.root_dir.path + "\n"
+    if ctx.attr.selinux_file_contexts:
+        extra_inputs.append(ctx.file.selinux_file_contexts)
+        image_info_contents += ctx.attr.type + "_selinux_fc=" + ctx.file.selinux_file_contexts.path + "\n"
+
+    if not ctx.attr.avb_enable:
+        if ctx.attr.avb_add_hashtree_footer_args:
+            fail("Must specify avb_enable = True to use avb_add_hashtree_footer_args")
+        if ctx.attr.avb_key:
+            fail("Must specify avb_enable = True to use avb_key")
+        if ctx.attr.avb_algorithm:
+            fail("Must specify avb_enable = True to use avb_key")
+        if ctx.attr.avb_rollback_index >= 0:
+            fail("Must specify avb_enable = True to use avb_rollback_index")
+        if ctx.attr.avb_rollback_index_location >= 0:
+            fail("Must specify avb_enable = True to use avb_rollback_index_location")
+    else:
+        image_info_contents += "avb_avbtool=avbtool\n"
+        image_info_contents += "avb_" + ctx.attr.type + "_hashtree_enable=true" + "\n"
+        footer_args = ctx.attr.avb_add_hashtree_footer_args
+        if footer_args:
+            footer_args += " "
+        footer_args += "--prop com.android.build.system.os_version:" + ctx.attr._platform_version_last_stable[BuildSettingInfo].value
+        footer_args += " --prop com.android.build.system.fingerprint:" + ctx.attr._build_fingerprint[BuildFingerprintInfo].fingerprint_placeholder_build_number
+        footer_args += " --prop com.android.build.system.security_patch:" + ctx.attr._platform_security_patch[BuildSettingInfo].value
+        if not ctx.attr.type.startswith("vbmeta_") and ctx.attr.avb_rollback_index >= 0:
+            footer_args += " --rollback_index " + str(ctx.attr.avb_rollback_index)
+        image_info_contents += "avb_" + ctx.attr.type + "_add_hashtree_footer_args=" + footer_args + "\n"
+        if ctx.attr.avb_key:
+            image_info_contents += "avb_" + ctx.attr.type + "_key_path=" + ctx.file.avb_key.path + "\n"
+            extra_inputs.append(ctx.file.avb_key)
+            image_info_contents += "avb_" + ctx.attr.type + "_algorithm=" + ctx.attr.avb_algorithm + "\n"
+            if ctx.attr.avb_rollback_index_location >= 0:
+                image_info_contents += "avb_" + ctx.attr.type + "_rollback_index_location=" + str(ctx.attr.avb_rollback_index_location) + "\n"
+
+    image_info_without_build_number = ctx.actions.declare_file(ctx.attr.name + "/image_info_without_build_number.txt")
+    ctx.actions.write(image_info_without_build_number, image_info_contents)
+    image_info = ctx.actions.declare_file(ctx.attr.name + "/image_info.txt")
+    ctx.actions.run(
+        inputs = [
+            ctx.version_file,
+            image_info_without_build_number,
+        ],
+        outputs = [image_info],
+        executable = ctx.executable._status_file_reader,
+        arguments = [
+            "replace",
+            ctx.version_file.path,
+            image_info_without_build_number.path,
+            image_info.path,
+            "--var",
+            "BUILD_NUMBER",
+        ],
+    )
+
+    staging_dir_builder_options_file = ctx.actions.declare_file(ctx.attr.name + "/staging_dir_builder_options.json")
+    ctx.actions.write(staging_dir_builder_options_file, json.encode(staging_dir_builder_options))
+
+    build_image_files = toolchain.build_image[DefaultInfo].files_to_run
+
+    # These are tools that are run from build_image or another tool that build_image runs.
+    # They are all expected to be available in the PATH.
+    extra_tools = [
+        toolchain.avbtool[DefaultInfo].files_to_run,
+        toolchain.e2fsdroid[DefaultInfo].files_to_run,
+        toolchain.fec[DefaultInfo].files_to_run,
+        toolchain.mke2fs[DefaultInfo].files_to_run,
+        toolchain.mkfs_erofs[DefaultInfo].files_to_run,
+        toolchain.mkuserimg_mke2fs[DefaultInfo].files_to_run,
+        toolchain.simg2img[DefaultInfo].files_to_run,
+        toolchain.tune2fs[DefaultInfo].files_to_run,
+    ]
 
     ctx.actions.run(
         inputs = [
             image_info,
-            file_mapping_file,
-        ] + files.keys(),
-        tools = [
-            toolchain.build_image,
-            toolchain.mkuserimg_mke2fs,
+            staging_dir_builder_options_file,
+            toolchain.openssl,
+        ] + files.values() + extra_inputs,
+        tools = extra_tools + [
+            build_image_files,
+            du,
+            find,
             python_interpreter,
+            toolchain.toybox[DefaultInfo].files_to_run,
         ],
         outputs = [output_image],
         executable = ctx.executable._staging_dir_builder,
         arguments = [
-            file_mapping_file.path,
-            staging_dir.path,
-            toolchain.build_image.path,
-            staging_dir.path,
+            staging_dir_builder_options_file.path,
+            build_image_files.executable.path,
+            "STAGING_DIR_PLACEHOLDER",
             image_info.path,
             output_image.path,
-            staging_dir.path,
+            "STAGING_DIR_PLACEHOLDER",
         ],
         mnemonic = "BuildPartition",
-        # TODO: the /usr/bin addition is because build_image uses the du command
-        # in GetDiskUsage(). This can probably be rewritten to just use python code
-        # instead.
-        env = {"PATH": python_interpreter.dirname + ":/usr/bin"},
+        env = {
+            # The dict + .keys() is to dedup the path elements, as some tools are in the same folder
+            "PATH": ":".join(({t.executable.dirname: True for t in extra_tools} | {
+                python_interpreter.dirname: True,
+            } | {
+                du.dirname: True,
+            } | {
+                find.dirname: True,
+            } | {
+                toolchain.openssl.dirname: True,
+            }).keys()),
+        },
     )
 
     return DefaultInfo(files = depset([output_image]))
@@ -349,15 +214,54 @@ _partition = rule(
             mandatory = True,
             values = _IMAGE_TYPES,
         ),
-        "deps": attr.label_list(
-            providers = [[InstallableInfo]],
-            aspects = [installable_aspect],
+        "image_properties": attr.string(
+            doc = "The image property dictionary in key=value format. TODO: consider replacing this with explicit bazel properties for each property in this file.",
+        ),
+        "avb_enable": attr.bool(),
+        "avb_add_hashtree_footer_args": attr.string(),
+        "avb_key": attr.label(allow_single_file = True),
+        "avb_algorithm": attr.string(),
+        "avb_rollback_index": attr.int(default = -1),
+        "avb_rollback_index_location": attr.int(default = -1),
+        "base_staging_dir": attr.label(
+            allow_single_file = True,
+            doc = "A staging dir that the deps will be added to. This is intended to be used to import a make-built staging directory when building the partition with bazel.",
+        ),
+        "base_staging_dir_file_list": attr.label(
+            allow_single_file = True,
+            doc = "A file list that will be used to filter the base_staging_dir.",
+        ),
+        "deps": attr.label_list(),
+        "root_dir": attr.label(
+            allow_single_file = True,
+            doc = "A folder to add as the root_dir property in the property file",
+        ),
+        "selinux_file_contexts": attr.label(
+            allow_single_file = True,
+            doc = "The file specifying the selinux rules for all the files in this partition.",
+        ),
+        "_build_broken_incorrect_partition_images": attr.label(
+            default = "//build/bazel/product_config:build_broken_incorrect_partition_images",
+        ),
+        "_build_fingerprint": attr.label(
+            default = "//build/bazel/rules:build_fingerprint",
+        ),
+        "_platform_version_last_stable": attr.label(
+            default = "//build/bazel/product_config:platform_version_last_stable",
+        ),
+        "_platform_security_patch": attr.label(
+            default = "//build/bazel/product_config:platform_security_patch",
         ),
         "_staging_dir_builder": attr.label(
             cfg = "exec",
             doc = "The tool used to build a staging directory, because if bazel were to build it it would be entirely symlinks.",
             executable = True,
             default = "//build/bazel/rules:staging_dir_builder",
+        ),
+        "_status_file_reader": attr.label(
+            cfg = "exec",
+            executable = True,
+            default = "//build/bazel/rules:status_file_reader",
         ),
     },
     toolchains = [
@@ -368,7 +272,7 @@ _partition = rule(
 
 def partition(target_compatible_with = [], **kwargs):
     target_compatible_with = select({
-        "//build/bazel/platforms/os:android": [],
+        "//build/bazel_common_rules/platforms/os:android": [],
         "//conditions:default": ["@platforms//:incompatible"],
     }) + target_compatible_with
     _partition(

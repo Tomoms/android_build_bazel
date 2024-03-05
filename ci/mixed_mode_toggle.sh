@@ -39,18 +39,18 @@ build/soong/soong_ui.bash --make-mode \
   com.android.tzdata \
   dist DIST_DIR=$DIST_DIR
 
-
 # PLEASE NOTE - IF TZDATA IS EVER REMOVED FROM THE PROD ALLOWLIST, THIS _WILL_ FAIL
 # Should that happen, look into reverting to the assertions on bazel-out or switching
+sentinel_file="${OUT_DIR}/bazel/output/execroot/__main__/bazel-out/*/bin/system/timezone/apex/com.android.tzdata.apex"
 
-if [[ ! $(ls out/bazel/output/execroot/__main__/bazel-out/aosp_arm64-userdebug-opt-ST-743b56eaae08/bin/system/timezone/apex/com.android.tzdata_staging_dir/etc/tz/tzdata) ]] ; then
-  echo "Expected tzdata files under bazel-out"
+if [[ $(ls ${sentinel_file} | wc -l) -ne 1 ]]; then
+  echo "Expected a single configuration of tzdata files under bazel-out"
   exit 1
 fi
 
 # Default setting should contain bazel-out, as *at least* tzdata is allowlisted for
 # default prod mode.
-if [[ $(grep -L "bazel-out" ${OUT_DIR}/soong/build.ninja) ]]; then
+if [[ $(grep -L "bazel-out" ${OUT_DIR}/soong/build.aosp_arm64.ninja) ]]; then
   echo "Expected default build to reference bazel-out"
   exit 1
 fi
@@ -59,7 +59,6 @@ fi
 # disabled.
 build/soong/soong_ui.bash --make-mode \
   --mk-metrics \
-  DISABLE_ARTIFACT_PATH_REQUIREMENTS=true \
   BUILD_BROKEN_DISABLE_BAZEL=true \
   BAZEL_STARTUP_ARGS="--max_idle_secs=5" \
   BAZEL_BUILD_ARGS="--color=no --curses=no --show_progress_rate_limit=5" \
@@ -70,7 +69,7 @@ build/soong/soong_ui.bash --make-mode \
 
 # Note - we could m clean and assert that the bazel build doesn't exist, but this is
 # a better use of time
-if [[ ! $(grep -L "bazel-out" ${OUT_DIR}/soong/build.ninja) ]]; then
+if [[ ! $(grep -L "bazel-out" ${OUT_DIR}/soong/build.aosp_arm64.ninja) ]]; then
   echo "Expected BUILD_BROKEN override to not reference bazel-out"
   exit 1
 fi
@@ -81,7 +80,6 @@ build/soong/soong_ui.bash --make-mode clean
 # causes analysis to be rerun.
 build/soong/soong_ui.bash --make-mode \
   --mk-metrics \
-  DISABLE_ARTIFACT_PATH_REQUIREMENTS=true \
   BAZEL_STARTUP_ARGS="--max_idle_secs=5" \
   BAZEL_BUILD_ARGS="--color=no --curses=no --show_progress_rate_limit=5" \
   TARGET_PRODUCT=aosp_arm64 \
@@ -89,36 +87,12 @@ build/soong/soong_ui.bash --make-mode \
   com.android.tzdata \
   dist DIST_DIR=$DIST_DIR
 
-if [[ ! $(ls out/bazel/output/execroot/__main__/bazel-out/aosp_arm64-userdebug-opt-ST-743b56eaae08/bin/system/timezone/apex/com.android.tzdata_staging_dir/etc/tz/tzdata) ]] ; then
-  echo "Expected tzdata files under bazel-out"
+if [[ $(ls ${sentinel_file} | wc -l) -ne 1 ]]; then
+  echo "Expected a single configuration of tzdata files under bazel-out"
   exit 1
 fi
 
-if [[ $(grep -L "bazel-out" ${OUT_DIR}/soong/build.ninja) ]]; then
+if [[ $(grep -L "bazel-out" ${OUT_DIR}/soong/build.aosp_arm64.ninja) ]]; then
   echo "Expected default build rerun to reference bazel-out"
-  exit 1
-fi
-
-build/soong/soong_ui.bash --make-mode clean
-
-# Regen ninja file with mixed builds dev mode.
-build/soong/soong_ui.bash --make-mode \
-  --mk-metrics \
-  --bazel-mode-dev \
-  DISABLE_ARTIFACT_PATH_REQUIREMENTS=true \
-  BAZEL_STARTUP_ARGS="--max_idle_secs=5" \
-  BAZEL_BUILD_ARGS="--color=no --curses=no --show_progress_rate_limit=5" \
-  TARGET_PRODUCT=aosp_arm64 \
-  TARGET_BUILD_VARIANT=userdebug \
-  com.android.tzdata \
-  dist DIST_DIR=$DIST_DIR
-
-if [[ ! $(ls out/bazel/output/execroot/__main__/bazel-out/aosp_arm64-userdebug-opt-ST-743b56eaae08/bin/system/timezone/apex/com.android.tzdata_staging_dir/etc/tz/tzdata) ]] ; then
-  echo "Expected tzdata files under bazel-out"
-  exit 1
-fi
-
-if [[ $(grep -L "bazel-out" ${OUT_DIR}/soong/build.ninja) ]]; then
-  echo "Expected dev mode build to reference bazel-out"
   exit 1
 fi

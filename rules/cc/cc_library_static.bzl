@@ -16,6 +16,7 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@bazel_tools//tools/build_defs/cc:action_names.bzl", "ACTION_NAMES")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
+load("@soong_injection//cc_toolchain:config_constants.bzl", config_constants = "constants")
 load("//build/bazel/rules:common.bzl", "get_dep_targets")
 load(
     ":cc_library_common.bzl",
@@ -32,7 +33,16 @@ load(
     "system_dynamic_deps_defaults",
 )
 load(":clang_tidy.bzl", "ClangTidyInfo", "clang_tidy_for_dir", "generate_clang_tidy_actions")
-load(":lto_transitions.bzl", "lto_deps_transition")
+
+# TODO: b/294868620 - Change this back to lto_deps_transition when completing
+#                     the bug
+load(":composed_transitions.bzl", "lto_and_sanitizer_static_transition")
+
+# TODO: b/294868620 - Remove when completing the bug
+load(
+    ":sanitizer_enablement_transition.bzl",
+    "drop_sanitizer_enablement_transition",
+)
 load(":stl.bzl", "stl_info_from_attr")
 
 _ALLOWED_MANUAL_INTERFACE_PATHS = [
@@ -46,6 +56,7 @@ CcStaticLibraryInfo = provider(fields = ["root_static_archive", "objects"])
 
 def cc_library_static(
         name,
+        shared_linking = False,
         deps = [],
         implementation_deps = [],
         dynamic_deps = [],
@@ -92,7 +103,9 @@ def cc_library_static(
         tidy_disabled_srcs = None,
         tidy_timeout_srcs = None,
         tidy_gen_header_filter = None,
-        native_coverage = True):
+        native_coverage = True,
+        additional_compiler_inputs = [],
+        applicable_licenses = []):
     "Bazel macro to correspond with the cc_library_static Soong module."
 
     exports_name = "%s_exports" % name
@@ -116,6 +129,11 @@ def cc_library_static(
             "-external_compiler_flags",
         ]
 
+    for allowed_project in config_constants.WarningAllowedProjects:
+        if native.package_name().startswith(allowed_project):
+            toolchain_features.append("-warnings_as_errors")
+            break
+
     if rtti:
         toolchain_features.append("rtti")
     if cpp_std:
@@ -125,7 +143,7 @@ def cc_library_static(
 
     for path in _ALLOWED_MANUAL_INTERFACE_PATHS:
         if native.package_name().startswith(path):
-            toolchain_features += ["do_not_check_manual_binder_interfaces"]
+            toolchain_features.append("do_not_check_manual_binder_interfaces")
             break
 
     if min_sdk_version:
@@ -146,6 +164,7 @@ def cc_library_static(
         # whole archive deps always re-export their includes, etc
         deps = deps + whole_archive_deps + dynamic_deps,
         target_compatible_with = target_compatible_with,
+        applicable_licenses = applicable_licenses,
         tags = ["manual"],
     )
 
@@ -161,11 +180,13 @@ def cc_library_static(
             implementation_deps +
             implementation_dynamic_deps +
             system_dynamic_deps +
+            stl_info.deps +
             stl_info.static_deps +
             stl_info.shared_deps +
             implementation_whole_archive_deps
         ),
         target_compatible_with = target_compatible_with,
+        applicable_licenses = applicable_licenses,
         tags = ["manual"],
     )
 
@@ -181,9 +202,10 @@ def cc_library_static(
             ("implementation_deps", [locals_name]),
             ("deps", [exports_name]),
             ("features", toolchain_features),
-            ("toolchains", ["//build/bazel/product_config:product_vars"]),
+            ("toolchains", ["//build/bazel/product_config:product_variables_for_attributes"]),
             ("target_compatible_with", target_compatible_with),
             ("linkopts", linkopts),
+            ("applicable_licenses", applicable_licenses),
         ],
     )
 
@@ -199,6 +221,7 @@ def cc_library_static(
         name = cpp_name,
         srcs = srcs,
         copts = copts + cppflags,
+        additional_compiler_inputs = additional_compiler_inputs,
         tags = ["manual"],
         alwayslink = True,
         **common_attrs
@@ -207,6 +230,7 @@ def cc_library_static(
         name = c_name,
         srcs = srcs_c,
         copts = copts + conlyflags,
+        additional_compiler_inputs = additional_compiler_inputs,
         tags = ["manual"],
         alwayslink = True,
         **common_attrs
@@ -220,13 +244,33 @@ def cc_library_static(
         **common_attrs
     )
 
+    tidy_providing_deps = []
+    if shared_linking:
+        tidy_providing_deps = (
+            deps +
+            implementation_deps +
+            whole_archive_deps +
+            implementation_whole_archive_deps +
+            runtime_deps +
+            dynamic_deps +
+            implementation_dynamic_deps
+        )
+    else:
+        # We should only be running tidy actions for object files on which
+        # we depend. For static libraries, only whole_archive_deps actually
+        # create a linking dependency; other dependencies are header-only,
+        # so we shouldn't try to run their tidy actions.
+        tidy_providing_deps = whole_archive_deps + implementation_whole_archive_deps
+
     # Root target to handle combining of the providers of the language-specific targets.
     _cc_library_combiner(
         name = name,
+        shared_linking = shared_linking,
         roots = [cpp_name, c_name, asm_name],
         deps = whole_archive_deps + implementation_whole_archive_deps,
         additional_sanitizer_deps = (
             deps +
+            stl_info.deps +
             stl_info.static_deps +
             implementation_deps
         ),
@@ -238,6 +282,7 @@ def cc_library_static(
         androidmk_whole_archive_deps = whole_archive_deps + implementation_whole_archive_deps,
         androidmk_dynamic_deps = dynamic_deps + implementation_dynamic_deps + system_dynamic_deps + stl_info.shared_deps,
         exports = exports_name,
+        applicable_licenses = applicable_licenses,
         tags = tags,
         features = toolchain_features,
 
@@ -255,6 +300,7 @@ def cc_library_static(
         tidy_disabled_srcs = tidy_disabled_srcs,
         tidy_timeout_srcs = tidy_timeout_srcs,
         tidy_gen_header_filter = tidy_gen_header_filter,
+        tidy_providing_deps = tidy_providing_deps,
     )
 
 def _generate_tidy_files(ctx):
@@ -309,9 +355,10 @@ def _generate_tidy_files(ctx):
 
 def _generate_tidy_actions(ctx):
     transitive_tidy_files = []
-    for ts in get_dep_targets(ctx.attr, predicate = lambda t: ClangTidyInfo in t).values():
-        for t in ts:
-            transitive_tidy_files.append(t[ClangTidyInfo].transitive_tidy_files)
+    for attr, attr_targets in get_dep_targets(ctx.attr, predicate = lambda t: ClangTidyInfo in t).items():
+        if attr == "tidy_providing_deps":
+            for t in attr_targets:
+                transitive_tidy_files.append(t[ClangTidyInfo].transitive_tidy_files)
 
     with_tidy = ctx.attr._with_tidy[BuildSettingInfo].value
     allow_local_tidy_true = ctx.attr._allow_local_tidy_true[BuildSettingInfo].value
@@ -396,23 +443,46 @@ def _archive_with_prebuilt_libs(ctx, prebuilt_deps, linking_outputs, cc_toolchai
 # may expect they are depending directly on a target which generates linker inputs,
 # as opposed to a proxy target which is a level of indirection to such a target.
 def _cc_library_combiner_impl(ctx):
+    sanitizer_lib_info = get_sanitizer_lib_info(ctx.attr.features, ctx.attr.deps + ctx.attr.additional_sanitizer_deps)
+
     old_owner_labels = []
     cc_infos = []
-    for dep in ctx.attr.deps:
-        old_owner_labels.append(dep.label)
-        cc_info = dep[CcInfo]
 
-        # do not propagate includes, hdrs, etc, already handled by roots
-        cc_infos.append(CcInfo(linking_context = cc_info.linking_context))
+    # Soong links whole archive deps of a static lib differently, all the .o files
+    # from the whole archive deps will be loaded into the static lib. This is
+    # different from when linking from a shared lib, in which case the whole
+    # archive deps will be linked separately.
+    if not ctx.attr.shared_linking:
+        for dep in ctx.attr.deps:
+            old_owner_labels.append(dep.label)
+            cc_info = dep[CcInfo]
+
+            # do not propagate includes, hdrs, etc, already handled by roots
+            cc_infos.append(CcInfo(linking_context = cc_info.linking_context))
 
     # we handle roots after deps to mimic Soong handling objects from whole archive deps prior to objects from the target itself
     for dep in ctx.attr.roots:
         old_owner_labels.append(dep.label)
         cc_infos.append(dep[CcInfo])
 
+    direct_owner_labels = []
+    if ctx.attr.shared_linking:
+        for dep in ctx.attr.static_deps:
+            if dep.label in old_owner_labels:
+                continue
+            direct_owner_labels.append(dep.label)
+            cc_info = dep[CcInfo]
+
+            # do not propagate includes, hdrs, etc, already handled by roots
+            cc_infos.append(CcInfo(linking_context = cc_info.linking_context))
+        if sanitizer_lib_info.propagate_ubsan_deps:
+            direct_owner_labels.append(ctx.attr._ubsan_library.label)
+            cc_infos.append(CcInfo(linking_context = ctx.attr._ubsan_library[CcInfo].linking_context))
+
     combined_info = cc_common.merge_cc_infos(cc_infos = cc_infos)
 
     objects_to_link = []
+    extra_linker_inputs = []
 
     prebuilt_deps = []
 
@@ -426,11 +496,14 @@ def _cc_library_combiner_impl(ctx):
                 # This is a prebuilt library, we have to handle it separately
                 if not lib.objects and lib.static_library:
                     prebuilt_deps.append(lib.static_library)
+        elif ctx.attr.shared_linking:
+            if old_linker_input.owner in direct_owner_labels:
+                extra_linker_inputs.append(old_linker_input)
         else:
             # Android macros don't handle transitive linker dependencies because
             # it's unsupported in legacy. We may want to change this going forward,
             # but for now it's good to validate that this invariant remains.
-            fail("cc_static_library %s given transitive linker dependency from %s" % (ctx.label, old_linker_input.owner))
+            fail("cc_static_library %s given transitive linker dependency from %s %s" % (ctx.label, old_linker_input.owner, old_owner_labels))
 
     cc_toolchain = find_cpp_toolchain(ctx)
 
@@ -457,24 +530,31 @@ def _cc_library_combiner_impl(ctx):
     output_file = _archive_with_prebuilt_libs(ctx, prebuilt_deps, linking_outputs, cc_toolchain)
     linker_input = cc_common.create_linker_input(
         owner = ctx.label,
-        libraries = depset(direct = [
-            cc_common.create_library_to_link(
-                actions = ctx.actions,
-                feature_configuration = feature_configuration,
-                cc_toolchain = cc_toolchain,
-                static_library = output_file,
-                objects = objects_to_link,
-                alwayslink = ctx.attr.alwayslink,
-            ),
-        ]),
+        libraries = depset(
+            direct = [
+                cc_common.create_library_to_link(
+                    actions = ctx.actions,
+                    feature_configuration = feature_configuration,
+                    cc_toolchain = cc_toolchain,
+                    static_library = output_file,
+                    objects = objects_to_link,
+                    alwayslink = ctx.attr.alwayslink,
+                ),
+            ],
+        ),
     )
-    linking_context = cc_common.create_linking_context(linker_inputs = depset(direct = [linker_input]))
+    linking_context = cc_common.create_linking_context(
+        linker_inputs = depset(
+            direct = [linker_input],
+            transitive = [depset(direct = extra_linker_inputs)],
+        ),
+    )
 
     providers = [
         DefaultInfo(files = depset(direct = [output_file]), data_runfiles = ctx.runfiles(files = [output_file])),
         CcInfo(compilation_context = combined_info.compilation_context, linking_context = linking_context),
         CcStaticLibraryInfo(root_static_archive = output_file, objects = objects_to_link),
-        get_sanitizer_lib_info(ctx.attr.features, ctx.attr.deps + ctx.attr.additional_sanitizer_deps),
+        sanitizer_lib_info,
         create_cc_androidmk_provider(
             static_deps = ctx.attr.androidmk_static_deps,
             whole_archive_deps = ctx.attr.androidmk_whole_archive_deps,
@@ -482,6 +562,23 @@ def _cc_library_combiner_impl(ctx):
         ),
     ]
     providers.extend(_generate_tidy_actions(ctx))
+    if ctx.attr.shared_linking:
+        providers.append(
+            # cc_shared_library only needs to traverse some attrs of the root library
+            cc_common.CcSharedLibraryHintInfo(
+                attributes = [
+                    "roots",
+                    "deps",
+                    "static_deps",
+                    "_ubsan_library",
+                ],
+            ),
+        )
+    else:
+        providers.append(cc_common.CcSharedLibraryHintInfo(
+            # cc_shared_library only needs to traverse some attrs of a static library
+            attributes = [],
+        ))
 
     return providers
 
@@ -496,18 +593,23 @@ def _cc_library_combiner_impl(ctx):
 #       by this rule.
 _cc_library_combiner = rule(
     implementation = _cc_library_combiner_impl,
+    cfg = drop_sanitizer_enablement_transition,
     attrs = {
         "roots": attr.label_list(
             providers = [CcInfo],
-            cfg = lto_deps_transition,
+            cfg = lto_and_sanitizer_static_transition,
         ),
         "deps": attr.label_list(
             providers = [CcInfo],
-            cfg = lto_deps_transition,
+            cfg = lto_and_sanitizer_static_transition,
+        ),
+        "shared_linking": attr.bool(
+            doc = "Whether to link as needed for shared libraries, rather than as needed for a static libraries.",
+            default = False,
         ),
         "additional_sanitizer_deps": attr.label_list(
             providers = [CcInfo],
-            cfg = lto_deps_transition,
+            cfg = lto_and_sanitizer_static_transition,
             doc = "Deps used only to check for sanitizer enablement",
         ),
         "runtime_deps": attr.label_list(
@@ -519,6 +621,11 @@ _cc_library_combiner = rule(
             doc = "All the static deps of the lib. This is used by" +
                   " abi_dump_aspect to travel along the static_deps edges" +
                   " to create abi dump files.",
+        ),
+        "_ubsan_library": attr.label(
+            default = "//prebuilts/clang/host/linux-x86:libclang_rt.ubsan_minimal",
+            doc = "The library target corresponding to the undefined " +
+                  "behavior sanitizer library to be used",
         ),
         "androidmk_static_deps": attr.label_list(
             providers = [CcInfo],
@@ -540,7 +647,7 @@ _cc_library_combiner = rule(
         ),
         "exports": attr.label(
             providers = [CcInfo],
-            cfg = lto_deps_transition,
+            cfg = lto_and_sanitizer_static_transition,
         ),
         "_cc_toolchain": attr.label(
             default = Label("@local_config_cc//:toolchain"),
@@ -563,13 +670,14 @@ _cc_library_combiner = rule(
         "copts_cpp": attr.string_list(),
         "copts_c": attr.string_list(),
         "hdrs": attr.label_list(allow_files = True),
-        "includes": attr.label_list(cfg = lto_deps_transition),
+        "includes": attr.label_list(cfg = lto_and_sanitizer_static_transition),
         "tidy_checks": attr.string_list(),
         "tidy_checks_as_errors": attr.string_list(),
         "tidy_flags": attr.string_list(),
         "tidy_disabled_srcs": attr.label_list(allow_files = True),
         "tidy_timeout_srcs": attr.label_list(allow_files = True),
         "tidy_gen_header_filter": attr.bool(),
+        "tidy_providing_deps": attr.label_list(),
         "_clang_tidy_sh": attr.label(
             default = Label("@//prebuilts/clang/host/linux-x86:clang-tidy.sh"),
             allow_single_file = True,
@@ -611,12 +719,16 @@ _cc_library_combiner = rule(
         "_allowlist_function_transition": attr.label(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
         ),
-        "_product_variables": attr.label(
-            default = "//build/bazel/product_config:product_vars",
+        "_tidy_checks": attr.label(
+            default = "//build/bazel/product_config:tidy_checks",
         ),
     },
     toolchains = ["@bazel_tools//tools/cpp:toolchain_type"],
-    provides = [CcInfo, CcAndroidMkInfo],
+    provides = [
+        CcInfo,
+        CcAndroidMkInfo,
+        cc_common.CcSharedLibraryHintInfo,
+    ],
     fragments = ["cpp"],
 )
 
@@ -626,13 +738,19 @@ def _cc_includes_impl(ctx):
         ctx.attr.absolute_includes,
     )
 
-    return [create_ccinfo_for_includes(
-        ctx,
-        includes = ctx.attr.includes,
-        absolute_includes = ctx.attr.absolute_includes,
-        system_includes = ctx.attr.system_includes,
-        deps = ctx.attr.deps,
-    )]
+    return [
+        create_ccinfo_for_includes(
+            ctx,
+            includes = ctx.attr.includes,
+            absolute_includes = ctx.attr.absolute_includes,
+            system_includes = ctx.attr.system_includes,
+            deps = ctx.attr.deps,
+        ),
+        cc_common.CcSharedLibraryHintInfo(
+            # cc_shared_library shouldn't ever traverse into deps of includes
+            attributes = [],
+        ),
+    ]
 
 # Bazel's native cc_library rule supports specifying include paths two ways:
 # 1. non-exported includes can be specified via copts attribute
@@ -653,5 +771,5 @@ _cc_includes = rule(
     },
     toolchains = ["@bazel_tools//tools/cpp:toolchain_type"],
     fragments = ["cpp"],
-    provides = [CcInfo],
+    provides = [CcInfo, cc_common.CcSharedLibraryHintInfo],
 )

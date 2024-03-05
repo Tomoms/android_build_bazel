@@ -119,7 +119,7 @@ def cc_hidl_library(
                 "-Werror",
                 "-Wextra-semi",
             ] + select({
-                "//build/bazel/product_variables:debuggable": ["-D__ANDROID_DEBUGGABLE__"],
+                "//build/bazel/product_config/config_settings:debuggable": ["-D__ANDROID_DEBUGGABLE__"],
                 "//conditions:default": [],
             })),
             ("min_sdk_version", min_sdk_version),

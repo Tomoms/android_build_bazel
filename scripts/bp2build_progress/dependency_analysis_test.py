@@ -15,30 +15,46 @@
 # limitations under the License.
 """Tests for dependency_analysis.py."""
 
+import unittest
 import dependency_analysis
 import queryview_xml
 import soong_module_json
-import unittest
 
 
 class DependencyAnalysisTest(unittest.TestCase):
 
   def test_visit_json_module_graph_post_order_visits_all_in_post_order(self):
     graph = [
-        soong_module_json.make_module('q', 'module', [
-            soong_module_json.make_dep('a'),
-            soong_module_json.make_dep('b'),
-        ]),
-        soong_module_json.make_module('a', 'module', [
-            soong_module_json.make_dep('b'),
-            soong_module_json.make_dep('c'),
-        ]),
-        soong_module_json.make_module('b', 'module', [
-            soong_module_json.make_dep('d'),
-        ]),
-        soong_module_json.make_module('c', 'module', [
-            soong_module_json.make_dep('e'),
-        ]),
+        soong_module_json.make_module(
+            'q',
+            'module',
+            [
+                soong_module_json.make_dep('a'),
+                soong_module_json.make_dep('b'),
+            ],
+        ),
+        soong_module_json.make_module(
+            'a',
+            'module',
+            [
+                soong_module_json.make_dep('b'),
+                soong_module_json.make_dep('c'),
+            ],
+        ),
+        soong_module_json.make_module(
+            'b',
+            'module',
+            [
+                soong_module_json.make_dep('d'),
+            ],
+        ),
+        soong_module_json.make_module(
+            'c',
+            'module',
+            [
+                soong_module_json.make_dep('e'),
+            ],
+        ),
         soong_module_json.make_module('d', 'module', []),
         soong_module_json.make_module('e', 'module', []),
     ]
@@ -52,24 +68,113 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module['Name'])
 
     dependency_analysis.visit_json_module_graph_post_order(
-        graph, set(), False, only_a, visit)
+        graph, set(), False, only_a, visit
+    )
 
     expected_visited = ['d', 'b', 'e', 'c', 'a']
     self.assertListEqual(visited_modules, expected_visited)
 
-  def test_visit_json_module_graph_post_order_skips_ignored_by_name_and_transitive(
-      self):
+  def test_visit_json_module_graph_post_order_visits_all_variants_in_post_order(
+      self,
+  ):
     graph = [
-        soong_module_json.make_module('a', 'module', [
-            soong_module_json.make_dep('b'),
-            soong_module_json.make_dep('c'),
-        ]),
-        soong_module_json.make_module('b', 'module', [
-            soong_module_json.make_dep('d'),
-        ]),
-        soong_module_json.make_module('c', 'module', [
-            soong_module_json.make_dep('e'),
-        ]),
+        soong_module_json.make_module(
+            'd',
+            'module',
+            [
+                soong_module_json.make_dep('g'),
+            ],
+            variations=[soong_module_json.make_variation('foo', '1')],
+        ),
+        soong_module_json.make_module(
+            'd',
+            'module',
+            [
+                soong_module_json.make_dep('f'),
+            ],
+            variations=[soong_module_json.make_variation('foo', '2')],
+        ),
+        soong_module_json.make_module('g', 'module', []),
+        soong_module_json.make_module('f', 'module', []),
+        soong_module_json.make_module('e', 'module', []),
+        soong_module_json.make_module(
+            'c',
+            'module',
+            [
+                soong_module_json.make_dep('e'),
+            ],
+        ),
+        soong_module_json.make_module(
+            'a',
+            'module',
+            [
+                soong_module_json.make_dep('b'),
+                soong_module_json.make_dep('c'),
+            ],
+        ),
+        soong_module_json.make_module(
+            'b',
+            'module',
+            [
+                soong_module_json.make_dep(
+                    'd',
+                    variations=[
+                        soong_module_json.make_variation('foo', '1'),
+                    ],
+                ),
+            ],
+        ),
+        soong_module_json.make_module(
+            'q',
+            'module',
+            [
+                soong_module_json.make_dep('a'),
+                soong_module_json.make_dep('b'),
+            ],
+        ),
+    ]
+
+    def only_a(json):
+      return json['Name'] == 'a'
+
+    visited_modules = []
+
+    def visit(module, _):
+      visited_modules.append(module['Name'])
+
+    dependency_analysis.visit_json_module_graph_post_order(
+        graph, set(), False, only_a, visit
+    )
+
+    expected_visited = ['g', 'f', 'd', 'd', 'b', 'e', 'c', 'a']
+    self.assertListEqual(visited_modules, expected_visited)
+
+  def test_visit_json_module_graph_post_order_skips_ignored_by_name_and_transitive(
+      self,
+  ):
+    graph = [
+        soong_module_json.make_module(
+            'a',
+            'module',
+            [
+                soong_module_json.make_dep('b'),
+                soong_module_json.make_dep('c'),
+            ],
+        ),
+        soong_module_json.make_module(
+            'b',
+            'module',
+            [
+                soong_module_json.make_dep('d'),
+            ],
+        ),
+        soong_module_json.make_module(
+            'c',
+            'module',
+            [
+                soong_module_json.make_dep('e'),
+            ],
+        ),
         soong_module_json.make_module('d', 'module', []),
         soong_module_json.make_module('e', 'module', []),
     ]
@@ -83,24 +188,38 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module['Name'])
 
     dependency_analysis.visit_json_module_graph_post_order(
-        graph, set('b'), False, only_a, visit)
+        graph, set('b'), False, only_a, visit
+    )
 
     expected_visited = ['e', 'c', 'a']
     self.assertListEqual(visited_modules, expected_visited)
 
   def test_visit_json_module_graph_post_order_skips_defaults_and_transitive(
-      self):
+      self,
+  ):
     graph = [
-        soong_module_json.make_module('a', 'module', [
-            soong_module_json.make_dep('b'),
-            soong_module_json.make_dep('c'),
-        ]),
-        soong_module_json.make_module('b', 'module_defaults', [
-            soong_module_json.make_dep('d'),
-        ]),
-        soong_module_json.make_module('c', 'module', [
-            soong_module_json.make_dep('e'),
-        ]),
+        soong_module_json.make_module(
+            'a',
+            'module',
+            [
+                soong_module_json.make_dep('b'),
+                soong_module_json.make_dep('c'),
+            ],
+        ),
+        soong_module_json.make_module(
+            'b',
+            'module_defaults',
+            [
+                soong_module_json.make_dep('d'),
+            ],
+        ),
+        soong_module_json.make_module(
+            'c',
+            'module',
+            [
+                soong_module_json.make_dep('e'),
+            ],
+        ),
         soong_module_json.make_module('d', 'module', []),
         soong_module_json.make_module('e', 'module', []),
     ]
@@ -114,19 +233,25 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module['Name'])
 
     dependency_analysis.visit_json_module_graph_post_order(
-        graph, set(), False, only_a, visit)
+        graph, set(), False, only_a, visit
+    )
 
     expected_visited = ['e', 'c', 'a']
     self.assertListEqual(visited_modules, expected_visited)
 
   def test_visit_json_module_graph_post_order_skips_windows_and_transitive(
-      self):
+      self,
+  ):
     windows_variation = soong_module_json.make_variation('os', 'windows')
     graph = [
-        soong_module_json.make_module('a', 'module', [
-            soong_module_json.make_dep('b', variations=[windows_variation]),
-            soong_module_json.make_dep('c'),
-        ]),
+        soong_module_json.make_module(
+            'a',
+            'module',
+            [
+                soong_module_json.make_dep('b', variations=[windows_variation]),
+                soong_module_json.make_dep('c'),
+            ],
+        ),
         soong_module_json.make_module(
             'b',
             'module',
@@ -135,9 +260,13 @@ class DependencyAnalysisTest(unittest.TestCase):
             ],
             variations=[windows_variation],
         ),
-        soong_module_json.make_module('c', 'module', [
-            soong_module_json.make_dep('e'),
-        ]),
+        soong_module_json.make_module(
+            'c',
+            'module',
+            [
+                soong_module_json.make_dep('e'),
+            ],
+        ),
         soong_module_json.make_module('d', 'module', []),
         soong_module_json.make_module('e', 'module', []),
     ]
@@ -151,24 +280,38 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module['Name'])
 
     dependency_analysis.visit_json_module_graph_post_order(
-        graph, set(), False, only_a, visit)
+        graph, set(), False, only_a, visit
+    )
 
     expected_visited = ['e', 'c', 'a']
     self.assertListEqual(visited_modules, expected_visited)
 
   def test_visit_json_module_graph_post_order_skips_prebuilt_tag_deps(self):
     graph = [
-        soong_module_json.make_module('a', 'module', [
-            soong_module_json.make_dep(
-                'b', 'android.prebuiltDependencyTag {BaseDependencyTag:{}}'),
-            soong_module_json.make_dep('c'),
-        ]),
-        soong_module_json.make_module('b', 'module', [
-            soong_module_json.make_dep('d'),
-        ]),
-        soong_module_json.make_module('c', 'module', [
-            soong_module_json.make_dep('e'),
-        ]),
+        soong_module_json.make_module(
+            'a',
+            'module',
+            [
+                soong_module_json.make_dep(
+                    'b', 'android.prebuiltDependencyTag {BaseDependencyTag:{}}'
+                ),
+                soong_module_json.make_dep('c'),
+            ],
+        ),
+        soong_module_json.make_module(
+            'b',
+            'module',
+            [
+                soong_module_json.make_dep('d'),
+            ],
+        ),
+        soong_module_json.make_module(
+            'c',
+            'module',
+            [
+                soong_module_json.make_dep('e'),
+            ],
+        ),
         soong_module_json.make_module('d', 'module', []),
         soong_module_json.make_module('e', 'module', []),
     ]
@@ -182,16 +325,19 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module['Name'])
 
     dependency_analysis.visit_json_module_graph_post_order(
-        graph, set(), False, only_a, visit)
+        graph, set(), False, only_a, visit
+    )
 
     expected_visited = ['e', 'c', 'a']
     self.assertListEqual(visited_modules, expected_visited)
 
   def test_visit_json_module_graph_post_order_no_infinite_loop_for_self_dep(
-      self):
+      self,
+  ):
     graph = [
-        soong_module_json.make_module('a', 'module',
-                                      [soong_module_json.make_dep('a')]),
+        soong_module_json.make_module(
+            'a', 'module', [soong_module_json.make_dep('a')]
+        ),
     ]
 
     def only_a(json):
@@ -203,18 +349,20 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module['Name'])
 
     dependency_analysis.visit_json_module_graph_post_order(
-        graph, set(), False, only_a, visit)
+        graph, set(), False, only_a, visit
+    )
 
     expected_visited = ['a']
     self.assertListEqual(visited_modules, expected_visited)
 
   def test_visit_json_module_graph_post_order_visits_all_variants(self):
+    m1_variation = [soong_module_json.make_variation('m', '1')]
     graph = [
         soong_module_json.make_module(
             'a',
             'module',
             [
-                soong_module_json.make_dep('b'),
+                soong_module_json.make_dep('b', variations=m1_variation),
             ],
             variations=[soong_module_json.make_variation('m', '1')],
         ),
@@ -222,18 +370,38 @@ class DependencyAnalysisTest(unittest.TestCase):
             'a',
             'module',
             [
-                soong_module_json.make_dep('c'),
+                soong_module_json.make_dep('c', variations=m1_variation),
             ],
             variations=[soong_module_json.make_variation('m', '2')],
         ),
-        soong_module_json.make_module('b', 'module', [
-            soong_module_json.make_dep('d'),
-        ]),
-        soong_module_json.make_module('c', 'module', [
-            soong_module_json.make_dep('e'),
-        ]),
-        soong_module_json.make_module('d', 'module', []),
-        soong_module_json.make_module('e', 'module', []),
+        soong_module_json.make_module(
+            'b',
+            'module',
+            [
+                soong_module_json.make_dep('d', variations=m1_variation),
+            ],
+            variations=[soong_module_json.make_variation('m', '1')],
+        ),
+        soong_module_json.make_module(
+            'c',
+            'module',
+            [
+                soong_module_json.make_dep('e', variations=m1_variation),
+            ],
+            variations=[soong_module_json.make_variation('m', '1')],
+        ),
+        soong_module_json.make_module(
+            'd',
+            'module',
+            [],
+            variations=[soong_module_json.make_variation('m', '1')],
+        ),
+        soong_module_json.make_module(
+            'e',
+            'module',
+            [],
+            variations=[soong_module_json.make_variation('m', '1')],
+        ),
     ]
 
     def only_a(json):
@@ -245,9 +413,10 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module['Name'])
 
     dependency_analysis.visit_json_module_graph_post_order(
-        graph, set(), False, only_a, visit)
+        graph, set(), False, only_a, visit
+    )
 
-    expected_visited = ['d', 'b', 'a', 'e', 'c', 'a']
+    expected_visited = ['d', 'b', 'e', 'c', 'a', 'a']
     self.assertListEqual(visited_modules, expected_visited)
 
   def test_visit_json_module_skips_filegroup_with_src_same_as_name(self):
@@ -286,21 +455,30 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module['Name'])
 
     dependency_analysis.visit_json_module_graph_post_order(
-        graph, set(), False, only_a, visit)
+        graph, set(), False, only_a, visit
+    )
 
     expected_visited = ['a']
     self.assertListEqual(visited_modules, expected_visited)
 
   def test_visit_json_module_graph_post_order_include_created_by(self):
     graph = [
-        soong_module_json.make_module('a', 'module', [
-            soong_module_json.make_dep('b'),
-            soong_module_json.make_dep('c'),
-        ]),
+        soong_module_json.make_module(
+            'a',
+            'module',
+            [
+                soong_module_json.make_dep('b'),
+                soong_module_json.make_dep('c'),
+            ],
+        ),
         soong_module_json.make_module('b', 'module', created_by='d'),
-        soong_module_json.make_module('c', 'module', [
-            soong_module_json.make_dep('e'),
-        ]),
+        soong_module_json.make_module(
+            'c',
+            'module',
+            [
+                soong_module_json.make_dep('e'),
+            ],
+        ),
         soong_module_json.make_module('d', 'module', []),
         soong_module_json.make_module('e', 'module', []),
     ]
@@ -314,19 +492,69 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module['Name'])
 
     dependency_analysis.visit_json_module_graph_post_order(
-        graph, set(), False, only_a, visit)
+        graph, set(), False, only_a, visit
+    )
 
     expected_visited = ['d', 'b', 'e', 'c', 'a']
+    self.assertListEqual(visited_modules, expected_visited)
+
+  def test_visit_json_module_graph_post_order_include_required(self):
+    graph = [
+        soong_module_json.make_module(
+            'a',
+            'module',
+            [
+                soong_module_json.make_dep('b'),
+            ],
+        ),
+        soong_module_json.make_module(
+            'b',
+            'module',
+            json_props=[
+                soong_module_json.make_property(
+                    # we explicitly specify a non-Soong module because there can
+                    # be Soong -> Kati edges in Required
+                    'Required', values=['c', 'not_soong']
+                ),
+                soong_module_json.make_property('Host_required', values=['d']),
+                soong_module_json.make_property(
+                    'Target_required', values=['e']
+                ),
+                soong_module_json.make_property('Linux.Host_required', values=['f']),
+            ],
+        ),
+        soong_module_json.make_module('c', 'module', []),
+        soong_module_json.make_module('d', 'module', []),
+        soong_module_json.make_module('e', 'module', []),
+        soong_module_json.make_module('f', 'module', []),
+    ]
+
+    def only_a(json):
+      return json['Name'] == 'a'
+
+    visited_modules = []
+
+    def visit(module, _):
+      visited_modules.append(module['Name'])
+
+    dependency_analysis.visit_json_module_graph_post_order(
+        graph, set(), False, only_a, visit
+    )
+
+    expected_visited = ['c', 'd', 'e', 'f', 'b', 'a']
     self.assertListEqual(visited_modules, expected_visited)
 
   def test_visit_queryview_xml_module_graph_post_order_visits_all(self):
     graph = queryview_xml.make_graph([
         queryview_xml.make_module(
-            '//pkg:a', 'a', 'module', dep_names=['//pkg:b', '//pkg:c']),
+            '//pkg:a', 'a', 'module', dep_names=['//pkg:b', '//pkg:c']
+        ),
         queryview_xml.make_module(
-            '//pkg:b', 'b', 'module', dep_names=['//pkg:d']),
+            '//pkg:b', 'b', 'module', dep_names=['//pkg:d']
+        ),
         queryview_xml.make_module(
-            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']),
+            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']
+        ),
         queryview_xml.make_module('//pkg:d', 'd', 'module'),
         queryview_xml.make_module('//pkg:e', 'e', 'module'),
     ])
@@ -340,20 +568,25 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module.name)
 
     dependency_analysis.visit_queryview_xml_module_graph_post_order(
-        graph, set(), only_a, visit)
+        graph, set(), only_a, visit
+    )
 
     expected_visited = ['d', 'b', 'e', 'c', 'a']
     self.assertListEqual(visited_modules, expected_visited)
 
   def test_visit_queryview_xml_module_graph_post_order_skips_ignore_by_name(
-      self):
+      self,
+  ):
     graph = queryview_xml.make_graph([
         queryview_xml.make_module(
-            '//pkg:a', 'a', 'module', dep_names=['//pkg:b', '//pkg:c']),
+            '//pkg:a', 'a', 'module', dep_names=['//pkg:b', '//pkg:c']
+        ),
         queryview_xml.make_module(
-            '//pkg:b', 'b', 'module', dep_names=['//pkg:d']),
+            '//pkg:b', 'b', 'module', dep_names=['//pkg:d']
+        ),
         queryview_xml.make_module(
-            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']),
+            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']
+        ),
         queryview_xml.make_module('//pkg:d', 'd', 'module'),
         queryview_xml.make_module('//pkg:e', 'e', 'module'),
     ])
@@ -367,7 +600,8 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module.name)
 
     dependency_analysis.visit_queryview_xml_module_graph_post_order(
-        graph, set('b'), only_a, visit)
+        graph, set('b'), only_a, visit
+    )
 
     expected_visited = ['e', 'c', 'a']
     self.assertListEqual(visited_modules, expected_visited)
@@ -375,11 +609,14 @@ class DependencyAnalysisTest(unittest.TestCase):
   def test_visit_queryview_xml_module_graph_post_order_skips_default(self):
     graph = queryview_xml.make_graph([
         queryview_xml.make_module(
-            '//pkg:a', 'a', 'module', dep_names=['//pkg:b', '//pkg:c']),
+            '//pkg:a', 'a', 'module', dep_names=['//pkg:b', '//pkg:c']
+        ),
         queryview_xml.make_module(
-            '//pkg:b', 'b', 'module_defaults', dep_names=['//pkg:d']),
+            '//pkg:b', 'b', 'module_defaults', dep_names=['//pkg:d']
+        ),
         queryview_xml.make_module(
-            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']),
+            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']
+        ),
         queryview_xml.make_module('//pkg:d', 'd', 'module'),
         queryview_xml.make_module('//pkg:e', 'e', 'module'),
     ])
@@ -393,7 +630,8 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module.name)
 
     dependency_analysis.visit_queryview_xml_module_graph_post_order(
-        graph, set(), only_a, visit)
+        graph, set(), only_a, visit
+    )
 
     expected_visited = ['e', 'c', 'a']
     self.assertListEqual(visited_modules, expected_visited)
@@ -401,11 +639,14 @@ class DependencyAnalysisTest(unittest.TestCase):
   def test_visit_queryview_xml_module_graph_post_order_skips_cc_prebuilt(self):
     graph = queryview_xml.make_graph([
         queryview_xml.make_module(
-            '//pkg:a', 'a', 'module', dep_names=['//pkg:b', '//pkg:c']),
+            '//pkg:a', 'a', 'module', dep_names=['//pkg:b', '//pkg:c']
+        ),
         queryview_xml.make_module(
-            '//pkg:b', 'b', 'cc_prebuilt_library', dep_names=['//pkg:d']),
+            '//pkg:b', 'b', 'cc_prebuilt_library', dep_names=['//pkg:d']
+        ),
         queryview_xml.make_module(
-            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']),
+            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']
+        ),
         queryview_xml.make_module('//pkg:d', 'd', 'module'),
         queryview_xml.make_module('//pkg:e', 'e', 'module'),
     ])
@@ -419,20 +660,25 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module.name)
 
     dependency_analysis.visit_queryview_xml_module_graph_post_order(
-        graph, set(), only_a, visit)
+        graph, set(), only_a, visit
+    )
 
     expected_visited = ['e', 'c', 'a']
     self.assertListEqual(visited_modules, expected_visited)
 
   def test_visit_queryview_xml_module_graph_post_order_skips_filegroup_duplicate_name(
-      self):
+      self,
+  ):
     graph = queryview_xml.make_graph([
         queryview_xml.make_module(
-            '//pkg:a', 'a', 'module', dep_names=['//pkg:b', '//pkg:c']),
+            '//pkg:a', 'a', 'module', dep_names=['//pkg:b', '//pkg:c']
+        ),
         queryview_xml.make_module(
-            '//pkg:b', 'b', 'filegroup', dep_names=['//pkg:d'], srcs=['b']),
+            '//pkg:b', 'b', 'filegroup', dep_names=['//pkg:d'], srcs=['b']
+        ),
         queryview_xml.make_module(
-            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']),
+            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']
+        ),
         queryview_xml.make_module('//pkg:d', 'd', 'module'),
         queryview_xml.make_module('//pkg:e', 'e', 'module'),
     ])
@@ -446,7 +692,8 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module.name)
 
     dependency_analysis.visit_queryview_xml_module_graph_post_order(
-        graph, set(), only_a, visit)
+        graph, set(), only_a, visit
+    )
 
     expected_visited = ['e', 'c', 'a']
     self.assertListEqual(visited_modules, expected_visited)
@@ -454,15 +701,18 @@ class DependencyAnalysisTest(unittest.TestCase):
   def test_visit_queryview_xml_module_graph_post_order_skips_windows(self):
     graph = queryview_xml.make_graph([
         queryview_xml.make_module(
-            '//pkg:a', 'a', 'module', dep_names=['//pkg:b', '//pkg:c']),
+            '//pkg:a', 'a', 'module', dep_names=['//pkg:b', '//pkg:c']
+        ),
         queryview_xml.make_module(
             '//pkg:b',
             'b',
             'module',
             dep_names=['//pkg:d'],
-            variant='windows-x86'),
+            variant='windows-x86',
+        ),
         queryview_xml.make_module(
-            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']),
+            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']
+        ),
         queryview_xml.make_module('//pkg:d', 'd', 'module'),
         queryview_xml.make_module('//pkg:e', 'e', 'module'),
     ])
@@ -476,33 +726,36 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module.name)
 
     dependency_analysis.visit_queryview_xml_module_graph_post_order(
-        graph, set(), only_a, visit)
+        graph, set(), only_a, visit
+    )
 
     expected_visited = ['e', 'c', 'a']
     self.assertListEqual(visited_modules, expected_visited)
 
   def test_visit_queryview_xml_module_graph_post_order_self_dep_no_infinite_loop(
-      self):
+      self,
+  ):
     graph = queryview_xml.make_graph([
         queryview_xml.make_module(
-            '//pkg:a',
-            'a',
-            'module',
-            dep_names=['//pkg:b--variant1', '//pkg:c']),
+            '//pkg:a', 'a', 'module', dep_names=['//pkg:b--variant1', '//pkg:c']
+        ),
         queryview_xml.make_module(
             '//pkg:b--variant1',
             'b',
             'module',
             variant='variant1',
-            dep_names=['//pkg:b--variant2']),
+            dep_names=['//pkg:b--variant2'],
+        ),
         queryview_xml.make_module(
             '//pkg:b--variant2',
             'b',
             'module',
             variant='variant2',
-            dep_names=['//pkg:d']),
+            dep_names=['//pkg:d'],
+        ),
         queryview_xml.make_module(
-            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']),
+            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']
+        ),
         queryview_xml.make_module('//pkg:d', 'd', 'module'),
         queryview_xml.make_module('//pkg:e', 'e', 'module'),
     ])
@@ -516,25 +769,31 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module.name)
 
     dependency_analysis.visit_queryview_xml_module_graph_post_order(
-        graph, set(), only_a, visit)
+        graph, set(), only_a, visit
+    )
 
     expected_visited = ['d', 'b', 'b', 'e', 'c', 'a']
     self.assertListEqual(visited_modules, expected_visited)
 
   def test_visit_queryview_xml_module_graph_post_order_skips_prebuilt_with_same_name(
-      self):
+      self,
+  ):
     graph = queryview_xml.make_graph([
         queryview_xml.make_module(
             '//pkg:a',
             'a',
             'module',
-            dep_names=['//other_pkg:prebuilt_a', '//pkg:b', '//pkg:c']),
-        queryview_xml.make_module('//other_pkg:prebuilt_a', 'prebuilt_a',
-                                  'prebuilt_module'),
+            dep_names=['//other_pkg:prebuilt_a', '//pkg:b', '//pkg:c'],
+        ),
         queryview_xml.make_module(
-            '//pkg:b', 'b', 'module', dep_names=['//pkg:d']),
+            '//other_pkg:prebuilt_a', 'prebuilt_a', 'prebuilt_module'
+        ),
         queryview_xml.make_module(
-            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']),
+            '//pkg:b', 'b', 'module', dep_names=['//pkg:d']
+        ),
+        queryview_xml.make_module(
+            '//pkg:c', 'c', 'module', dep_names=['//pkg:e']
+        ),
         queryview_xml.make_module('//pkg:d', 'd', 'module'),
         queryview_xml.make_module('//pkg:e', 'e', 'module'),
     ])
@@ -548,7 +807,8 @@ class DependencyAnalysisTest(unittest.TestCase):
       visited_modules.append(module.name)
 
     dependency_analysis.visit_queryview_xml_module_graph_post_order(
-        graph, set(), only_a, visit)
+        graph, set(), only_a, visit
+    )
 
     expected_visited = ['d', 'b', 'e', 'c', 'a']
     self.assertListEqual(visited_modules, expected_visited)

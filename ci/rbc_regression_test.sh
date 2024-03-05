@@ -55,7 +55,7 @@ for arg in $@; do
         die "Invalid product name: $arg. Example: aosp_arm64-userdebug"
     product="${BASH_REMATCH[1]}"
     variant="${BASH_REMATCH[2]}"
-    ninja_files=(soong/build.ninja build-${product}.ninja build-${product}-package.ninja)
+    ninja_files=(soong/build.${product}.ninja build-${product}.ninja build-${product}-package.ninja)
 
     # Build with converter, save Ninja files, build without it.
     saved_ninja_dir=out/ninja_rbc/${product}-${variant}

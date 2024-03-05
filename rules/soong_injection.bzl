@@ -21,6 +21,7 @@ def _impl(rctx):
     rctx.symlink(soong_injection_dir + "/mixed_builds", "mixed_builds")
     rctx.symlink(soong_injection_dir + "/cc_toolchain", "cc_toolchain")
     rctx.symlink(soong_injection_dir + "/java_toolchain", "java_toolchain")
+    rctx.symlink(soong_injection_dir + "/rust_toolchain", "rust_toolchain")
     rctx.symlink(soong_injection_dir + "/apex_toolchain", "apex_toolchain")
     rctx.symlink(soong_injection_dir + "/product_config", "product_config")
     rctx.symlink(soong_injection_dir + "/product_config_platforms", "product_config_platforms")

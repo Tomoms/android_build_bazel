@@ -13,50 +13,35 @@
 # limitations under the License.
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("//build/bazel/rules:proto_file_utils.bzl", "proto_file_utils")
+
+_TYPE_DICTIONARY = {".py": "_pb2.py"}
 
 def _py_proto_sources_gen_rule_impl(ctx):
-    imports = []
-    all_outputs = []
-    for dep in ctx.attr.deps:
-        proto_info = dep[ProtoInfo]
+    out_files_map = proto_file_utils.generate_proto_action(
+        proto_infos = [dep[ProtoInfo] for dep in ctx.attr.deps],
+        protoc = ctx.executable._protoc,
+        ctx = ctx,
+        type_dictionary = _TYPE_DICTIONARY,
+        out_flags = [],
+        plugin_executable = None,
+        out_arg = "--python_out",
+        mnemonic = "PyProtoGen",
+        transitive_proto_infos = [dep[ProtoInfo] for dep in ctx.attr.transitive_deps],
+    )
 
-        outputs = []
-        for name in proto_info.direct_sources:
-            outputs.append(ctx.actions.declare_file(paths.replace_extension(name.basename, "_pb2.py"), sibling = name))
+    # proto_file_utils generates the files at <package>/<label>
+    # interesting examples
+    # 1. foo.proto will be generated in <package>/<label>/foo_pb2.py
+    # 2. foo.proto with an import prefix in proto_library will be generated in <package>/<label>/<import_prefix>/foo_pb2.py
+    imports = [paths.join("__main__", ctx.label.package, ctx.label.name)]
 
-        args = ctx.actions.args()
-        args.add("--python_out=" + proto_info.proto_source_root)
-        args.add_all(["-I", proto_info.proto_source_root])
-        args.add_all(proto_info.direct_sources)
+    output_depset = depset(direct = out_files_map[".py"])
 
-        if proto_info.proto_source_root != ".":
-            imports.append(paths.join("__main__", paths.relativize(proto_info.proto_source_root, ctx.bin_dir.path)))
-
-        # It's not clear what to do with transititve imports/sources
-        if len(proto_info.transitive_imports.to_list()) > len(proto_info.direct_sources) or len(proto_info.transitive_sources.to_list()) > len(proto_info.direct_sources):
-            fail("TODO: Transitive imports/sources of python protos")
-
-        ctx.actions.run(
-            inputs = depset(
-                direct = proto_info.direct_sources,
-                transitive = [proto_info.transitive_imports],
-            ),
-            executable = ctx.executable._protoc,
-            outputs = outputs,
-            arguments = [args],
-            mnemonic = "PyProtoGen",
-        )
-
-        all_outputs.extend(outputs)
-
-    output_depset = depset(direct = all_outputs)
     return [
         DefaultInfo(files = output_depset),
         PyInfo(
             transitive_sources = output_depset,
-            # If proto_source_root is set to something other than the root of the workspace, import the current package.
-            # It's always the current package because it's the path to where we generated the python sources, not to where
-            # the proto sources are.
             imports = depset(direct = imports),
         ),
     ]
@@ -69,6 +54,13 @@ _py_proto_sources_gen = rule(
             doc = "proto_library or any other target exposing ProtoInfo provider with *.proto files",
             mandatory = True,
         ),
+        "transitive_deps": attr.label_list(
+            providers = [ProtoInfo],
+            doc = """
+proto_library that will be added to aprotoc -I when compiling the direct .proto sources.
+WARNING: This is an experimental attribute and is expected to be deprecated in the future.
+""",
+        ),
         "_protoc": attr.label(
             default = Label("//external/protobuf:aprotoc"),
             executable = True,
@@ -80,13 +72,16 @@ _py_proto_sources_gen = rule(
 def py_proto_library(
         name,
         deps = [],
+        transitive_deps = [],
         target_compatible_with = [],
+        data = [],
         **kwargs):
     proto_lib_name = name + "_proto_gen"
 
     _py_proto_sources_gen(
         name = proto_lib_name,
         deps = deps,
+        transitive_deps = transitive_deps,
         **kwargs
     )
 
@@ -98,6 +93,7 @@ def py_proto_library(
         name = name,
         srcs = [":" + proto_lib_name],
         deps = [":" + proto_lib_name] + (["//external/protobuf:libprotobuf-python"] if "libprotobuf-python" not in name else []),
+        data = data,
         target_compatible_with = target_compatible_with,
         **kwargs
     )

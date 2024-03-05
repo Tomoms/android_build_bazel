@@ -15,7 +15,7 @@
 # Helpers for stl property resolution.
 # These mappings taken from build/soong/cc/stl.go
 
-load("//build/bazel/product_variables:constants.bzl", "constants")
+load("//build/bazel/platforms/arch/variants:constants.bzl", "arch_variant_to_constraints")
 
 _libcpp_stl_names = {
     "libc++": True,
@@ -24,20 +24,17 @@ _libcpp_stl_names = {
     "system": True,
 }
 
-# https://cs.android.com/android/platform/superproject/+/master:build/soong/cc/stl.go;l=157;drc=55d98d2ba142d6c35894b1092397e2b5a70bc2e8
-_common_static_deps = select({
-    constants.ArchVariantToConstraints["android"]: ["//external/libcxxabi:libc++demangle"],
-    "//conditions:default": [],
-})
-
 # https://cs.android.com/android/platform/superproject/+/master:build/soong/cc/stl.go;l=162;drc=cb0ac95bde896fa2aa59193a37ceb580758c322c
 # this should vary based on vndk version
 # skip libm and libc because then we would have duplicates due to system_shared_library
 _libunwind = "//prebuilts/clang/host/linux-x86:libunwind"
 
+_ndk_system = "//prebuilts/ndk:ndk_system"
+
 _static_binary_deps = select({
-    constants.ArchVariantToConstraints["android"]: [_libunwind],
-    constants.ArchVariantToConstraints["linux_bionic"]: [_libunwind],
+    arch_variant_to_constraints["android"]: [_libunwind],
+    arch_variant_to_constraints["linux_bionic"]: [_libunwind],
+    "//build/bazel/rules/apex:unbundled_app": [],
     "//conditions:default": [],
 })
 
@@ -61,33 +58,112 @@ def stl_info_from_attr(stl_name, is_shared, is_binary = False):
     return struct(
         static_deps = deps.static,
         shared_deps = deps.shared,
+        deps = deps.deps,
         cppflags = flags.cppflags,
         linkopts = flags.linkopts,
     )
 
 def _stl_deps(stl_name, is_shared, is_binary = False):
-    stl_name = _stl_name_resolver(stl_name, is_shared)
     if stl_name == "none":
-        return struct(static = [], shared = [])
+        return struct(static = [], shared = [], deps = [])
 
-    shared, static = [], []
-    if stl_name == "libc++":
-        static, shared = _shared_stl_deps()
+    shared, static, deps = [], [], []
+    if stl_name in ("", "system"):
+        if is_shared:
+            shared = select({
+                # non-sdk variant, effective STL is libc++
+                arch_variant_to_constraints["android"]: [
+                    "//external/libcxx:libc++",
+                ],
+                # sdk variant, effective STL is ndk_system
+                "//build/bazel/rules/apex:unbundled_app": [
+                    "//bionic/libc:libstdc++",
+                ],
+                "//conditions:default": ["//external/libcxx:libc++"],  # libc++ is used by host variants
+            })
+            static = select({
+                arch_variant_to_constraints["android"]: [
+                    "//external/libcxxabi:libc++demangle",
+                ],
+                # sdk variant does not have an entry since ndk_system's deps have been added in `shared`
+                "//build/bazel/rules/apex:unbundled_app": [],
+                "//conditions:default": [],
+            })
+            deps = select({
+                # sdk variant, effective STL is ndk_system
+                "//build/bazel/rules/apex:unbundled_app": [
+                    _ndk_system,
+                ],
+                "//conditions:default": [],
+            })
+
+        else:
+            shared = select({
+                # sdk variant, effective STL is ndk_system
+                "//build/bazel/rules/apex:unbundled_app": [
+                    "//bionic/libc:libstdc++",
+                ],
+                "//conditions:default": [],
+            })
+            static = select({
+                # non-sdk variant, effective STL is libc++_static
+                arch_variant_to_constraints["android"]: [
+                    "//external/libcxx:libc++_static",
+                    "//external/libcxxabi:libc++demangle",
+                ],
+                # sdk variant does not have an entry since ndk_system's deps have been added in `shared`
+                "//build/bazel/rules/apex:unbundled_app": [],
+                "//conditions:default": ["//external/libcxx:libc++_static"],  # libc++_static is used by host variants
+            })
+            deps = select({
+                # sdk variant, effective STL is ndk_system
+                "//build/bazel/rules/apex:unbundled_app": [
+                    _ndk_system,
+                ],
+                "//conditions:default": [],
+            })
+    elif stl_name == "libc++":
+        shared = select({
+            arch_variant_to_constraints["android"]: [
+                "//external/libcxx:libc++",
+            ],
+            # sdk variant, effective STL is ndk_libc++_shared
+            "//build/bazel/rules/apex:unbundled_app": [
+                "//prebuilts/ndk:ndk_libc++_shared",
+            ],
+            "//conditions:default": ["//external/libcxx:libc++"],  # libc++ is used by host variants
+        })
+        static = select({
+            arch_variant_to_constraints["android"]: [
+                "//external/libcxxabi:libc++demangle",
+            ],
+            "//build/bazel/rules/apex:unbundled_app": [
+                "//prebuilts/ndk:ndk_libunwind",
+            ],
+            "//conditions:default": [],
+        })
+
     elif stl_name == "libc++_static":
-        static = _static_stl_deps()
+        static = select({
+            arch_variant_to_constraints["android"]: [
+                "//external/libcxx:libc++_static",
+                "//external/libcxxabi:libc++demangle",
+            ],
+            # sdk variant, effective STL is ndk_libc++_static
+            "//build/bazel/rules/apex:unbundled_app": [
+                "//prebuilts/ndk:ndk_libc++_static",
+                "//prebuilts/ndk:ndk_libc++abi",
+                "//prebuilts/ndk:ndk_libunwind",
+            ],
+            "//conditions:default": ["//external/libcxx:libc++_static"],  # libc++_static is used by host variants
+        })
     if is_binary:
         static += _static_binary_deps
     return struct(
         static = static,
         shared = shared,
+        deps = deps,
     )
-
-def _static_stl_deps():
-    # TODO(b/201079053): Handle useSdk, windows, preferably with selects.
-    return ["//external/libcxx:libc++_static"] + _common_static_deps
-
-def _shared_stl_deps():
-    return (_common_static_deps, ["//external/libcxx:libc++"])
 
 def _stl_flags(stl_name, is_shared):
     """returns flags that control STL inclusion
@@ -135,17 +211,20 @@ def _stl_flags(stl_name, is_shared):
 
     return struct(
         cppflags = select({
-            "//build/bazel/platforms/os:bionic": [],
+            "//build/bazel_common_rules/platforms/os:bionic": [],
+            "//build/bazel/rules/apex:unbundled_app": [],
             "//conditions:default": cppflags_not_bionic,
         }) + select({
-            "//build/bazel/platforms/os:darwin": cppflags_darwin,
-            "//build/bazel/platforms/os:windows": (
+            "//build/bazel_common_rules/platforms/os:darwin": cppflags_darwin,
+            "//build/bazel_common_rules/platforms/os:windows": (
                 cppflags_windows_not_bionic
             ),
             "//conditions:default": [],
         }),
         linkopts = select({
-            "//build/bazel/platforms/os:bionic": [],
+            "//build/bazel_common_rules/platforms/os:bionic": [],
+            "//build/bazel/rules/apex:unbundled_app": [],
+            "//build/bazel/rules/apex:unbundled_app.arm": ["-Wl,--exclude-libs,libunwind.a"],
             "//conditions:default": linkopts_not_bionic,
         }),
     )

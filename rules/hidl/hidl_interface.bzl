@@ -22,7 +22,6 @@ def hidl_interface(
         srcs = [],
         deps = [],
         root = "",
-        root_interface_file = "",
         min_sdk_version = "",
         tags = []):
     "Bazel macro to correspond with the hidl_interface Soong module."
@@ -36,7 +35,11 @@ def hidl_interface(
         deps = interface_deps,
         fq_name = name,
         root = root,
-        root_interface_file = root_interface_file,
+    )
+
+    native.filegroup(
+        name = name + "_hal",
+        srcs = srcs,
     )
 
     cc_hidl_library(

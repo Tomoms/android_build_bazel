@@ -37,7 +37,7 @@ _KT_COMPILER_ATTRS = _attrs.add(
         # Magic attribute name for DexArchiveAspect
         _toolchain = attr.label(
             default = Label(
-                "@rules_kotlin//toolchains/kotlin_jvm:kt_jvm_toolchain_impl",
+                "//build/bazel/rules/kotlin:kt_jvm_toolchain_linux_jdk",
             ),
         ),
     ),

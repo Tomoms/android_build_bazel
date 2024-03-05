@@ -15,13 +15,16 @@
 py_library(
     name = "dependency_analysis",
     srcs = ["dependency_analysis.py"],
+    imports = ["."],
     visibility = ["//visibility:public"],
+    deps = ["//build/soong/ui/metrics:metrics-py-proto"],
 )
 
 py_library(
     name = "queryview_xml",
     testonly = True,
     srcs = ["queryview_xml.py"],
+    imports = ["."],
     visibility = ["//visibility:public"],
 )
 
@@ -29,11 +32,13 @@ py_library(
     name = "soong_module_json",
     testonly = True,
     srcs = ["soong_module_json.py"],
+    imports = ["."],
     visibility = ["//visibility:public"],
 )
 
 py_test(
     name = "dependency_analysis_test",
+    size = "small",
     srcs = ["dependency_analysis_test.py"],
     python_version = "PY3",
     deps = [
@@ -55,6 +60,7 @@ py_binary(
 
 py_test(
     name = "bp2build_progress_test",
+    size = "small",
     srcs = ["bp2build_progress_test.py"],
     python_version = "PY3",
     deps = [

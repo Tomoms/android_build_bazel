@@ -13,7 +13,7 @@
 # limitations under the License.
 load("@bazel_skylib//lib:paths.bzl", "paths")
 
-SystemInfo = provider(fields = ["system"])
+SystemInfo = provider(fields = ["system", "java_info"])
 
 def _gen_module_info_java(ctx, jars_to_module_info, jars, module_info):
     ctx.actions.run_shell(
@@ -131,6 +131,7 @@ def _java_system_modules_impl(ctx):
     return [
         SystemInfo(
             system = system,
+            java_info = java_info,
         ),
         DefaultInfo(files = depset([system])),
     ]
@@ -155,7 +156,7 @@ java_system_modules = rule(
             cfg = "exec",
             allow_single_file = True,
             doc = "The tool merge_zips.",
-            default = "//prebuilts/build-tools:linux-x86/bin/merge_zips",
+            default = "//build/soong/cmd/merge_zips",
             executable = True,
         ),
         "_runtime": attr.label(

@@ -36,13 +36,18 @@ def _cc_proto_sources_gen_rule_impl(ctx):
     hdrs = []
     includes = []
     proto_infos = []
+    transitive_proto_infos = []
 
     for dep in ctx.attr.deps:
         proto_info = dep[ProtoInfo]
         proto_infos.append(proto_info)
         if proto_info.proto_source_root == ".":
             includes.append(paths.join(ctx.label.name, ctx.label.package))
+
         includes.append(ctx.label.name)
+
+    for transitive_dep in ctx.attr.transitive_deps:
+        transitive_proto_infos.append(transitive_dep[ProtoInfo])
 
     outs = _generate_cc_proto_action(
         proto_infos = proto_infos,
@@ -52,6 +57,7 @@ def _cc_proto_sources_gen_rule_impl(ctx):
         out_flags = out_flags,
         plugin_executable = plugin_executable,
         out_arg = out_arg,
+        transitive_proto_infos = transitive_proto_infos,
     )
     srcs.extend(outs[_SOURCES_KEY])
     hdrs.extend(outs[_HEADERS_KEY])
@@ -70,6 +76,13 @@ _cc_proto_sources_gen = rule(
 proto_library or any other target exposing ProtoInfo provider with *.proto files
 """,
             mandatory = True,
+        ),
+        "transitive_deps": attr.label_list(
+            providers = [ProtoInfo],
+            doc = """
+proto_library that will be added to aprotoc -I when compiling the direct .proto sources.
+WARNING: This is an experimental attribute and is expected to be deprecated in the future.
+""",
         ),
         "_protoc": attr.label(
             default = Label("//external/protobuf:aprotoc"),
@@ -100,6 +113,7 @@ def _generate_cc_proto_action(
         proto_infos,
         protoc,
         ctx,
+        transitive_proto_infos,
         plugin_executable,
         out_arg,
         out_flags,
@@ -117,22 +131,25 @@ def _generate_cc_proto_action(
         plugin_executable = plugin_executable,
         out_arg = out_arg,
         mnemonic = "CcProtoGen",
+        transitive_proto_infos = transitive_proto_infos,
     )
 
 def _cc_proto_library(
         name,
         deps = [],
+        transitive_deps = [],
+        cc_deps = [],
         plugin = None,
         tags = [],
         target_compatible_with = [],
         out_format = None,
-        proto_dep = None,
         **kwargs):
     proto_lib_name = name + PROTO_GEN_NAME_SUFFIX
 
     _cc_proto_sources_gen(
         name = proto_lib_name,
         deps = deps,
+        transitive_deps = transitive_deps,
         plugin = plugin,
         out_format = out_format,
         tags = ["manual"],
@@ -141,10 +158,7 @@ def _cc_proto_library(
     cc_library_static(
         name = name,
         srcs = [":" + proto_lib_name],
-        deps = [
-            proto_lib_name,
-            proto_dep,
-        ],
+        deps = [proto_lib_name] + cc_deps,
         local_includes = ["."],
         tags = tags,
         target_compatible_with = target_compatible_with,
@@ -154,6 +168,8 @@ def _cc_proto_library(
 def cc_lite_proto_library(
         name,
         deps = [],
+        transitive_deps = [],
+        cc_deps = [],
         plugin = None,
         tags = [],
         target_compatible_with = [],
@@ -161,17 +177,20 @@ def cc_lite_proto_library(
     _cc_proto_library(
         name,
         deps = deps,
+        transitive_deps = transitive_deps,
+        cc_deps = cc_deps + ["//external/protobuf:libprotobuf-cpp-lite"],
         plugin = plugin,
         tags = tags,
         target_compatible_with = target_compatible_with,
         out_format = "lite",
-        proto_dep = "//external/protobuf:libprotobuf-cpp-lite",
         **kwargs
     )
 
 def cc_proto_library(
         name,
         deps = [],
+        transitive_deps = [],
+        cc_deps = [],
         plugin = None,
         tags = [],
         target_compatible_with = [],
@@ -179,9 +198,10 @@ def cc_proto_library(
     _cc_proto_library(
         name,
         deps = deps,
+        transitive_deps = transitive_deps,
+        cc_deps = cc_deps + ["//external/protobuf:libprotobuf-cpp-full"],
         plugin = plugin,
         tags = tags,
         target_compatible_with = target_compatible_with,
-        proto_dep = "//external/protobuf:libprotobuf-cpp-full",
         **kwargs
     )

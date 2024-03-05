@@ -94,11 +94,20 @@ def _get_version(java_version = None, api_level = None):
         return _default_version(api_level)
     return _DEFAULT_VERSION
 
+def _kt_jvm_version_from_normalized_java_version(java_version):
+    if java_version == 7:
+        return "1.6"
+    elif java_version == 8:
+        return "1.8"
+    else:
+        return str(java_version)
+
 java_versions = struct(
     ALL_VERSIONS = _ALL_VERSIONS,
     VERSION_TO_CONFIG_SETTING = _VERSION_TO_CONFIG_SETTING,
     compatible_versions_for_api_level = _compatible_versions_for_api_level,
     get_version = _get_version,
+    kt_jvm_version_from_normalized_java_version = _kt_jvm_version_from_normalized_java_version,
     supports_pre_java_9 = _supports_pre_java_9,
     supports_post_java_9 = _supports_post_java_9,
 )

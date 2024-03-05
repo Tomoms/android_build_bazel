@@ -28,7 +28,7 @@ def _cc_prebuilt_binary_impl(ctx):
             target_file = ctx.files.src[0],
         )
     else:
-        exec = stripped_impl(ctx)
+        exec = stripped_impl(ctx, ctx.file.src)
     return [
         DefaultInfo(
             files = depset([exec]),

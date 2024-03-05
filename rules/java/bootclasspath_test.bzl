@@ -13,7 +13,7 @@
 # limitations under the License.
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load(":bootclasspath.bzl", "bootclasspath")
-load(":rules.bzl", "java_import")
+load(":import.bzl", "java_import")
 load(":java_system_modules.bzl", "java_system_modules")
 
 def _bootclasspath_test_impl(ctx):
@@ -25,6 +25,11 @@ def _bootclasspath_test_impl(ctx):
         java_common.BootClassPathInfo in bootclasspath_target,
         "Expected BootClassPathInfo in bootclasspath providers.",
     )
+    asserts.true(
+        env,
+        len(bootclasspath_target[java_common.BootClassPathInfo].bootclasspath.to_list()) == 1,
+        "Expected bootclasspath to have 1 jars, got %s" % bootclasspath_target[java_common.BootClassPathInfo].bootclasspath,
+    )
     return analysistest.end(env)
 
 bootclasspath_test = analysistest.make(
@@ -33,13 +38,14 @@ bootclasspath_test = analysistest.make(
 
 def test_bootclasspath_provider():
     name = "test_bootclasspath_provider"
-    import_target = ":" + name + "_import"
-    system_target = ":" + name + "_jsm"
+    import_name = name + "_import"
+    other_import_name = name + "_other_import"
+    system_name = name + "_jsm"
     bootclasspath(
         name = name + "_target",
-        bootclasspath = [import_target],
-        system = system_target,
-        auxiliary = [import_target],
+        bootclasspath = [import_name],
+        system = system_name,
+        auxiliary = [import_name],
         tags = ["manual"],
     )
     bootclasspath_test(
@@ -47,12 +53,17 @@ def test_bootclasspath_provider():
         target_under_test = name + "_target",
     )
     java_system_modules(
-        name = name + "_jsm",
-        deps = [import_target],
+        name = system_name,
+        deps = [other_import_name],
         tags = ["manual"],
     )
     java_import(
-        name = import_target[1:],
+        name = other_import_name,
+        jars = ["a_jar.jar"],
+        tags = ["manual"],
+    )
+    java_import(
+        name = import_name,
         jars = ["some_jar.jar"],
         tags = ["manual"],
     )

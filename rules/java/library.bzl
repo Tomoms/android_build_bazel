@@ -18,7 +18,11 @@ load(
     "@rules_java//java:defs.bzl",
     _java_library = "java_library",
 )
-load("//build/bazel/rules/java:sdk_transition.bzl", "sdk_transition", "sdk_transition_attrs")
+load("//build/bazel/rules/java:sdk_transition.bzl", "sdk_transition_attrs")
+
+_sharded_java_library = experimental_java_library_export_do_not_use.sharded_java_library(
+    default_shard_size = 0,
+)
 
 # TODO(b/277801336): document these attributes.
 def java_library(
@@ -28,26 +32,42 @@ def java_library(
         javacopts = [],
         sdk_version = None,
         java_version = None,
+        errorprone_force_enable = None,
         tags = [],
         target_compatible_with = [],
         visibility = None,
+        javac_shard_size = 0,
         **kwargs):
+    """ java_library macro wrapper that handles custom attrs needed in AOSP
+
+    Args:
+        errorprone_force_enable: set this to true to always run Error Prone
+            on this target (overriding the value of environment variable
+            RUN_ERROR_PRONE). Error Prone can be force disabled for an individual
+            module by adding the "-XepDisableAllChecks" flag to javacopts
+    """
     lib_name = name + "_private"
 
-    #    Disable the error prone check of HashtableContains by default. See https://errorprone.info/bugpattern/HashtableContains
-    #    HashtableContains error is reported when compiling //external/bouncycastle:bouncycastle-bcpkix-unbundled
-    opts = ["-Xep:HashtableContains:OFF"] + javacopts
+    opts = javacopts
+    if errorprone_force_enable == None:
+        # TODO (b/227504307) temporarily disable errorprone until environment variable is handled
+        opts = opts + ["-XepDisableAllChecks"]
 
-    _java_library(
-        name = lib_name,
-        srcs = srcs,
-        deps = deps,
-        javacopts = opts,
-        tags = tags + ["manual"],
-        target_compatible_with = target_compatible_with,
-        visibility = ["//visibility:private"],
-        **kwargs
-    )
+    args = {
+        "name": lib_name,
+        "srcs": srcs,
+        "deps": deps,
+        "javacopts": opts,
+        "tags": tags + ["manual"],
+        "target_compatible_with": target_compatible_with,
+        "visibility": ["//visibility:private"],
+    }
+    args.update(kwargs)
+    if javac_shard_size > 0:
+        args["experimental_javac_shard_size"] = javac_shard_size
+        _sharded_java_library(**args)
+    else:
+        _java_library(**args)
 
     java_library_sdk_transition(
         name = name,
@@ -56,7 +76,7 @@ def java_library(
         exports = lib_name,
         tags = tags,
         target_compatible_with = target_compatible_with,
-        visibility = ["//visibility:public"],
+        visibility = visibility,
     )
 
 # The list of providers to forward was determined using cquery on one

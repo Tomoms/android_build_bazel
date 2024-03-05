@@ -165,6 +165,15 @@ apex {
     ],
 }
 
+apex {
+    name: "build.bazel.examples.apex.minimal_variant",
+    defaults: [
+        "build.bazel.examples.apex.minimal_defaults",
+    ],
+    apex_available_name: "build.bazel.examples.apex.minimal",
+    variant_version: "3",
+}
+
 override_apex {
     name: "build.bazel.examples.apex.override.minimal",
     base: "build.bazel.examples.apex.minimal",

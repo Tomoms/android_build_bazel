@@ -21,7 +21,7 @@ source "${RUNFILES_DIR}/bazel_tools/tools/bash/runfiles/runfiles.bash"
 # Smoke test to check that the stripped libc.so is smaller than the unstripped one.
 function test_libc_stripping_basic() {
     local readonly base="__main__/bionic/libc"
-    local readonly stripped_path="${base}/libc.so"
+    local readonly stripped_path="${base}/libc/libc.so"
     local readonly unstripped_path="${base}/liblibc_unstripped.so"
     local stripped="$(rlocation $stripped_path)"
     local unstripped="$(rlocation $unstripped_path)"
@@ -35,8 +35,8 @@ function test_libc_stripping_basic() {
       exit 2
     fi
 
-    local stripped_size=$(stat -c %s "${stripped}")
-    local unstripped_size=$(stat -c %s "${unstripped}")
+    local stripped_size=$(stat -L -c %s "${stripped}")
+    local unstripped_size=$(stat -L -c %s "${unstripped}")
 
     # Check that the unstripped size is not greater or equal to the stripped size.
     if [ "${stripped_size}" -ge "${unstripped_size}"  ]; then

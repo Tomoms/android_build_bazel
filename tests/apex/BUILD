@@ -15,7 +15,7 @@ apex_diff_test(
     name = "com.android.adbd_compressed_vs_uncompressed",
     apex1 = ":com.android.adbd.capex",
     apex2 = "//packages/modules/adb/apex:com.android.adbd",
-    target_compatible_with = ["//build/bazel/platforms/os:android"],
+    target_compatible_with = ["//build/bazel_common_rules/platforms/os:android"],
 )
 
 apex_compression_test(
@@ -82,7 +82,6 @@ genrule(
         "--deapexer-path $(location //system/apex/tools:deapexer)",
         "--readelf-path $(location //prebuilts/clang/host/linux-x86:llvm-readelf)",
         "--debugfs-path $(location //external/e2fsprogs/debugfs)",
-        "--blkid-path $(location //external/e2fsprogs/misc:blkid)",
         "--fsckerofs-path $(location //external/erofs-utils:fsck.erofs)",
         "$<",
         "$@",
@@ -91,7 +90,6 @@ genrule(
     tools = [
         ":apks_binary_arches",
         "//external/e2fsprogs/debugfs",
-        "//external/e2fsprogs/misc:blkid",
         "//external/erofs-utils:fsck.erofs",
         "//prebuilts/clang/host/linux-x86:llvm-readelf",
         "//system/apex/tools:deapexer",
@@ -169,8 +167,8 @@ diff_test(
     file1 = ":minimal_apex_using.txt",
     file2 = ":minimal_apex_using.txt.golden",
     target_compatible_with = [
-        "//build/bazel/platforms/os:android",
-        "//build/bazel/platforms/arch:arm64",
+        "//build/bazel_common_rules/platforms/os:android",
+        "//build/bazel_common_rules/platforms/arch:arm64",
     ],
 )
 
@@ -192,8 +190,8 @@ diff_test(
     file1 = ":minimal_apex_using.xml",
     file2 = ":minimal_apex_using.xml.golden",
     target_compatible_with = [
-        "//build/bazel/platforms/os:android",
-        "//build/bazel/platforms/arch:arm64",
+        "//build/bazel_common_rules/platforms/os:android",
+        "//build/bazel_common_rules/platforms/arch:arm64",
     ],
 )
 

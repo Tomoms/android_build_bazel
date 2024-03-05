@@ -18,7 +18,7 @@ load("@bazel_skylib//lib:paths.bzl", "paths")
 def _gensrcs_impl(ctx):
     # The next two assignments can be created by using ctx.resolve_command
     # TODO: Switch to using ctx.resolve_command when it is out of experimental
-    command = ctx.expand_location(ctx.attr.cmd)
+    command = ctx.expand_location(ctx.attr.cmd, targets = ctx.attr.data)
     tools = [
         tool[DefaultInfo].files_to_run
         for tool in ctx.attr.tools
@@ -55,7 +55,7 @@ def _gensrcs_impl(ctx):
         ctx.actions.run_shell(
             tools = tools,
             outputs = [out_file],
-            inputs = in_files,
+            inputs = in_files + ctx.files.data,
             command = shell_command,
             progress_message = "Generating %s from %s" % (
                 out_file.path,
@@ -95,6 +95,11 @@ gensrcs = rule(
                   "The path of an individual `tools` target //x:y can be " +
                   "obtained using `$(location //x:y)`",
             cfg = "exec",
+        ),
+        "data": attr.label_list(
+            allow_files = True,
+            doc = "Additional files needed for build that are not tooling " +
+                  "related.",
         ),
     },
 )

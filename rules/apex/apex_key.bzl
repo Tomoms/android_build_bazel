@@ -13,7 +13,7 @@
 # limitations under the License.
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("//build/bazel/product_config:product_variables_providing_rule.bzl", "ProductVariablesDepsInfo", "ProductVariablesInfo")
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 
 ApexKeyInfo = provider(
     "Info needed to sign APEX bundles",
@@ -30,10 +30,10 @@ def _apex_key_rule_impl(ctx):
     # If the DefaultAppCertificate directory is specified, then look for this
     # key in that directory instead, with the exact same basenames for both the
     # avbpubkey and pem files.
-    product_var_cert = ctx.attr._product_variables[ProductVariablesInfo].DefaultAppCertificate
-    cert_files_to_search = ctx.attr._product_variables[ProductVariablesDepsInfo].DefaultAppCertificateFiles
+    product_var_cert = ctx.attr._default_app_certificate[BuildSettingInfo].value
+    cert_files_to_search = ctx.attr._default_app_certificate_filegroup[DefaultInfo]
     if product_var_cert and cert_files_to_search:
-        for f in cert_files_to_search:
+        for f in cert_files_to_search.files.to_list():
             if f.basename == ctx.file.public_key.basename:
                 public_key = f
             elif f.basename == ctx.file.private_key.basename:
@@ -61,8 +61,11 @@ _apex_key = rule(
     attrs = {
         "private_key": attr.label(mandatory = True, allow_single_file = True),
         "public_key": attr.label(mandatory = True, allow_single_file = True),
-        "_product_variables": attr.label(
-            default = "//build/bazel/product_config:product_vars",
+        "_default_app_certificate": attr.label(
+            default = "//build/bazel/product_config:default_app_certificate",
+        ),
+        "_default_app_certificate_filegroup": attr.label(
+            default = "//build/bazel/product_config:default_app_certificate_filegroup",
         ),
     },
 )

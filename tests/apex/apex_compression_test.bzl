@@ -37,5 +37,5 @@ def apex_compression_test(name, apex, compressed):
             apex,
         ],
         args = args,
-        target_compatible_with = ["//build/bazel/platforms/os:android"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:android"],
     )

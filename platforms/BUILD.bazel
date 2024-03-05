@@ -16,3 +16,12 @@ load(":platform_utils.bzl", "platform_utils")
 package(default_visibility = ["//visibility:public"])
 
 platform_utils(name = "platform_utils")
+
+# This constraint setting will only be active during mixed builds, do not include it in other
+# platforms.
+constraint_setting(name = "mixed_builds_constraint")
+
+constraint_value(
+    name = "mixed_builds",
+    constraint_setting = ":mixed_builds_constraint",
+)

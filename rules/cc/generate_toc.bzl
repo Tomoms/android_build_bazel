@@ -46,5 +46,6 @@ def generate_toc(ctx, name, input_file):
             "-d",
             d_file.path,
         ],
+        mnemonic = "GenerateToc",
     )
     return CcTocInfo(toc = out_file)

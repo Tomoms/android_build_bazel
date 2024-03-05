@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//build/bazel/rules/java:rules.bzl", "java_binary", "java_import", "java_library")
-load("//build/bazel/rules/kotlin:rules.bzl", "kt_jvm_library")
+load("@rules_java//java:defs.bzl", "java_binary")
+load("//build/bazel/rules/java:import.bzl", "java_import")
+load("//build/bazel/rules/java:library.bzl", "java_library")
+load("//build/bazel/rules/kotlin:kt_jvm_library.bzl", "kt_jvm_library")
 
 package(default_applicable_licenses = ["//build/soong/licenses:Android-Apache-2.0"])
 
@@ -22,7 +24,7 @@ java_binary(
     srcs = ["example/HelloWorld.java"],
     main_class = "com.bazel.example.HelloWorld",
     target_compatible_with = select({
-        "//build/bazel/platforms/os:android": ["@platforms//:incompatible"],
+        "//build/bazel_common_rules/platforms/os:android": ["@platforms//:incompatible"],
         "//conditions:default": [],
     }),
     deps = [

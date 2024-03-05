@@ -116,7 +116,7 @@ def _cc_gen_sysprop_common(
     return sysprop_gen_name
 
 sysprop_deps = select({
-    "//build/bazel/platforms/os:android": ["//system/libbase:libbase_headers"],
+    "//build/bazel_common_rules/platforms/os:android": ["//system/libbase:libbase_headers"],
     "//conditions:default": [
         "//system/libbase:libbase_bp2build_cc_library_static",
         "//system/logging/liblog:liblog_bp2build_cc_library_static",
@@ -124,7 +124,7 @@ sysprop_deps = select({
 })
 
 sysprop_dynamic_deps = select({
-    "//build/bazel/platforms/os:android": [
+    "//build/bazel_common_rules/platforms/os:android": [
         "//system/logging/liblog",
     ],
     "//conditions:default": [],

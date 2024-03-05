@@ -23,7 +23,7 @@ def _cc_prebuilt_library_static_impl(ctx):
         ctx = ctx,
         cc_toolchain = cc_toolchain,
     )
-    cc_info = create_cc_prebuilt_library_info(
+    cc_info, _ = create_cc_prebuilt_library_info(
         ctx,
         cc_common.create_library_to_link(
             actions = ctx.actions,

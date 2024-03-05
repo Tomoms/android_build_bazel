@@ -16,6 +16,7 @@
 
 #include <jni.h>
 #include <string>
+#include <sstream>
 
 #include "build/bazel/examples/android_app/java/com/app/jni_dep.h"
 
@@ -23,5 +24,7 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_app_Jni_hello(JNIEnv *env, jclass clazz) {
   std::string hello = "Hello";
   std::string jni = "JNI";
-  return NewStringLatin1(env, (hello + " " + jni).c_str());
+  std::stringstream class_ss;
+  class_ss << clazz;
+  return NewStringLatin1(env, (hello + " " + jni + " " + class_ss.str()).c_str());
 }

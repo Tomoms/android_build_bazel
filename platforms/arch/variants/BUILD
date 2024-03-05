@@ -1,7 +1,6 @@
 # Cpu/Arch Variants and features
 
-load("//build/bazel/product_variables:constants.bzl", _product_variable_constants = "constants")
-load(":constants.bzl", "constants", "power_set")
+load(":constants.bzl", "arch_variant_to_constraints", "constants", "power_set")
 load(":constants_test.bzl", "power_set_test_suite")
 
 constraint_setting(
@@ -27,7 +26,7 @@ package(
         config_setting(
             name = variant + "-" + arch,
             constraint_values = [
-                _product_variable_constants.ArchVariantToConstraints[arch],
+                arch_variant_to_constraints[arch],
                 ":" + variant,
             ],
         )
@@ -53,7 +52,7 @@ constraint_setting(
         config_setting(
             name = variant + "-" + arch,
             constraint_values = [
-                _product_variable_constants.ArchVariantToConstraints[arch],
+                arch_variant_to_constraints[arch],
                 ":" + variant,
             ],
         )
@@ -80,7 +79,7 @@ constraint_setting(
         config_setting(
             name = arch + "-" + "-".join(sorted(features)),
             constraint_values = [
-                _product_variable_constants.ArchVariantToConstraints[arch],
+                arch_variant_to_constraints[arch],
             ] + [":" + feature for feature in features],
         )
         for features in power_set(

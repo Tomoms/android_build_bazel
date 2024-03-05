@@ -14,11 +14,16 @@
 load(":java_system_modules.bzl", "SystemInfo")
 
 def _bootclasspath_impl(ctx):
-    compile_jars = lambda b: b[JavaInfo].compile_jars.to_list()
+    infos = [b[JavaInfo] for b in ctx.attr.bootclasspath]
+    java_info = java_common.merge(infos)
+
+    # TODO: b/304657641 - system modules propagate java_info, including compile jars, we could consider consolidating bootclasspaths from system modules for the toolchains
+    bootclasspath_jars = java_info.compile_jars.to_list()
+
     return java_common.BootClassPathInfo(
-        bootclasspath = [jar for b in ctx.attr.bootclasspath for jar in compile_jars(b)],
+        bootclasspath = bootclasspath_jars,
         system = ctx.attr.system[SystemInfo].system if ctx.attr.system else None,
-        auxiliary = [jar for b in ctx.attr.auxiliary for jar in compile_jars(b)],
+        auxiliary = [jar for b in ctx.attr.auxiliary for jar in b[JavaInfo].compile_jars.to_list()],
     )
 
 bootclasspath = rule(

@@ -93,25 +93,25 @@ def _crt_cc_object_min_sdk_version_overriden_by_apex_min_sdk_version():
         name = crt_apex_test_name,
         target_under_test = crt_obj_name,
         expected_min_sdk_version = _apex_min_sdk_version,
-        target_compatible_with = ["@//build/bazel/platforms/os:android"],
+        target_compatible_with = ["@//build/bazel_common_rules/platforms/os:android"],
     )
     _min_sdk_version_target_flag_with_apex_test(
         name = not_crt_apex_test_name,
         target_under_test = not_crt_obj_name,
         expected_min_sdk_version = obj_min_sdk_version,
-        target_compatible_with = ["@//build/bazel/platforms/os:android"],
+        target_compatible_with = ["@//build/bazel_common_rules/platforms/os:android"],
     )
     _min_sdk_version_target_flag_test(
         name = crt_not_apex_test_name,
         target_under_test = crt_obj_name,
         expected_min_sdk_version = obj_min_sdk_version,
-        target_compatible_with = ["@//build/bazel/platforms/os:android"],
+        target_compatible_with = ["@//build/bazel_common_rules/platforms/os:android"],
     )
     _min_sdk_version_target_flag_test(
         name = not_crt_not_apex_test_name,
         target_under_test = not_crt_obj_name,
         expected_min_sdk_version = obj_min_sdk_version,
-        target_compatible_with = ["@//build/bazel/platforms/os:android"],
+        target_compatible_with = ["@//build/bazel_common_rules/platforms/os:android"],
     )
 
     return [
@@ -121,8 +121,80 @@ def _crt_cc_object_min_sdk_version_overriden_by_apex_min_sdk_version():
         not_crt_not_apex_test_name,
     ]
 
+def _cc_object_partial_linking_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    actions = analysistest.target_actions(env)
+    cpp_link_actions = [a for a in actions if a.mnemonic == "CppLink"]
+    noaddrsig_actions = [a for a in actions if a.mnemonic == "CppObjcopyNoAddrsig"]
+    asserts.true(
+        env,
+        len(cpp_link_actions) > 0,
+        "No CppLink actions found in : %s" % (
+            [a.mnemonic for a in actions],
+        ),
+    )
+
+    # Verify multiple objects results in a partial link command line
+    asserts.true(
+        env,
+        " ".join(cpp_link_actions[0].argv).find(" -Wl,-r ") != -1,
+        "CppLink action missing -r : %s" % (
+            cpp_link_actions[0].argv
+        ),
+    )
+
+    # Verify partial linking also triggers CppObjcopyNoAddrsig
+    asserts.true(
+        env,
+        len(noaddrsig_actions) > 0,
+        "No CppObjcopyNoAddrsig actions found in : %s" % (
+            actions,
+        ),
+    )
+
+    return analysistest.end(env)
+
+_cc_object_partial_linking_test = analysistest.make(
+    _cc_object_partial_linking_test_impl,
+    attrs = {
+    },
+)
+
+def _cc_object_partial_linking():
+    name = "cc_object_partial_linking"
+    test_name = name + "_test"
+
+    dep1_name = name + "_dep1"
+    dep2_name = name + "_dep2"
+
+    cc_object(
+        name = dep1_name,
+        srcs = ["a.cc"],
+        tags = ["manual"],
+    )
+    cc_object(
+        name = dep2_name,
+        srcs = ["b.cc"],
+        tags = ["manual"],
+    )
+    cc_object(
+        name = name,
+        objs = [dep1_name, dep2_name],
+        tags = ["manual"],
+    )
+
+    _cc_object_partial_linking_test(
+        name = test_name,
+        target_under_test = name,
+        target_compatible_with = ["@//build/bazel_common_rules/platforms/os:android"],
+    )
+
+    return test_name
+
 def cc_object_test_suite(name):
     native.test_suite(
         name = name,
-        tests = _crt_cc_object_min_sdk_version_overriden_by_apex_min_sdk_version(),
+        tests = _crt_cc_object_min_sdk_version_overriden_by_apex_min_sdk_version() + [
+            _cc_object_partial_linking(),
+        ],
     )

@@ -55,7 +55,8 @@ def _abi_linker_action_test_impl(ctx):
 
     action = link_actions[0]
 
-    stripped_so = paths.join(bazel_out_base, "lib" + ctx.attr.lib_name + "_stripped.so")
+    output_lib_dir = ctx.attr.lib_name + "_stripped"
+    stripped_so = paths.join(bazel_out_base, output_lib_dir, "lib" + output_lib_dir + ".so")
     symbol_file = paths.join(ctx.label.package, ctx.attr.symbol_file)
     asserts.set_equals(
         env,
@@ -141,8 +142,8 @@ __abi_linker_action_test = analysistest.make(
 def _abi_linker_action_test(**kwargs):
     __abi_linker_action_test(
         target_compatible_with = [
-            "//build/bazel/platforms/arch:x86_64",
-            "//build/bazel/platforms/os:android",
+            "//build/bazel_common_rules/platforms/arch:x86_64",
+            "//build/bazel_common_rules/platforms/os:android",
         ],
         **kwargs
     )
@@ -249,8 +250,8 @@ __abi_linker_action_run_test = analysistest.make(
 def _abi_linker_action_run_test(**kwargs):
     __abi_linker_action_run_test(
         target_compatible_with = [
-            "//build/bazel/platforms/arch:x86_64",
-            "//build/bazel/platforms/os:android",
+            "//build/bazel_common_rules/platforms/arch:x86_64",
+            "//build/bazel_common_rules/platforms/os:android",
         ],
         **kwargs
     )
@@ -293,8 +294,8 @@ __abi_linker_action_not_run_test = analysistest.make(
 def _abi_linker_action_not_run_test(**kwargs):
     __abi_linker_action_not_run_test(
         target_compatible_with = [
-            "//build/bazel/platforms/arch:x86_64",
-            "//build/bazel/platforms/os:android",
+            "//build/bazel_common_rules/platforms/arch:x86_64",
+            "//build/bazel_common_rules/platforms/os:android",
         ],
         **kwargs
     )
@@ -306,8 +307,8 @@ __abi_linker_action_not_run_for_no_device_test = analysistest.make(
 def _abi_linker_action_not_run_for_no_device_test(**kwargs):
     __abi_linker_action_not_run_for_no_device_test(
         target_compatible_with = [
-            "//build/bazel/platforms/arch:x86_64",
-            "//build/bazel/platforms/os:linux",
+            "//build/bazel_common_rules/platforms/arch:x86_64",
+            "//build/bazel_common_rules/platforms/os:linux",
         ],
         **kwargs
     )
@@ -320,8 +321,8 @@ __abi_linker_action_not_run_for_coverage_test = analysistest.make(
 def _abi_linker_action_not_run_for_coverage_test(**kwargs):
     __abi_linker_action_not_run_for_coverage_test(
         target_compatible_with = [
-            "//build/bazel/platforms/arch:x86_64",
-            "//build/bazel/platforms/os:android",
+            "//build/bazel_common_rules/platforms/arch:x86_64",
+            "//build/bazel_common_rules/platforms/os:android",
         ],
         **kwargs
     )
@@ -334,8 +335,8 @@ __abi_linker_action_not_run_if_skipped_test = analysistest.make(
 def _abi_linker_action_not_run_if_skipped_test(**kwargs):
     __abi_linker_action_not_run_if_skipped_test(
         target_compatible_with = [
-            "//build/bazel/platforms/arch:x86_64",
-            "//build/bazel/platforms/os:android",
+            "//build/bazel_common_rules/platforms/arch:x86_64",
+            "//build/bazel_common_rules/platforms/os:android",
         ],
         **kwargs
     )
@@ -348,8 +349,8 @@ __abi_linker_action_not_run_apex_no_stubs_test = analysistest.make(
 def _abi_linker_action_not_run_apex_no_stubs_test(**kwargs):
     __abi_linker_action_not_run_apex_no_stubs_test(
         target_compatible_with = [
-            "//build/bazel/platforms/arch:x86_64",
-            "//build/bazel/platforms/os:android",
+            "//build/bazel_common_rules/platforms/arch:x86_64",
+            "//build/bazel_common_rules/platforms/os:android",
         ],
         **kwargs
     )
@@ -544,8 +545,8 @@ __abi_diff_action_test = analysistest.make(
 def _abi_diff_action_test(**kwargs):
     __abi_diff_action_test(
         target_compatible_with = [
-            "//build/bazel/platforms/arch:x86_64",
-            "//build/bazel/platforms/os:android",
+            "//build/bazel_common_rules/platforms/arch:x86_64",
+            "//build/bazel_common_rules/platforms/os:android",
         ],
         **kwargs
     )
@@ -601,8 +602,8 @@ __abi_diff_action_not_run_test = analysistest.make(
 def _abi_diff_action_not_run_test(**kwargs):
     __abi_diff_action_not_run_test(
         target_compatible_with = [
-            "//build/bazel/platforms/arch:x86_64",
-            "//build/bazel/platforms/os:android",
+            "//build/bazel_common_rules/platforms/arch:x86_64",
+            "//build/bazel_common_rules/platforms/os:android",
         ],
         **kwargs
     )

@@ -14,7 +14,12 @@
 
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "unittest", skylib_asserts = "asserts")
 load("//build/bazel/rules/test_common:asserts.bzl", roboleaf_asserts = "asserts")
+load("//build/bazel/rules/test_common:rules.bzl", "target_under_test_exist_test")
+load(":cc_binary.bzl", "cc_binary")
 load(":cc_library_common.bzl", "CcAndroidMkInfo", "is_external_directory")
+load(":cc_library_shared.bzl", "cc_library_shared")
+load(":cc_library_static.bzl", "cc_library_static")
+load(":cc_prebuilt_library_shared.bzl", "cc_prebuilt_library_shared")
 
 asserts = skylib_asserts + roboleaf_asserts
 
@@ -150,8 +155,77 @@ target_provides_androidmk_info_test = analysistest.make(
     },
 )
 
+# Same as target_provides_androidmk_info_test, but builds sdk variant of cc_libraries
+target_sdk_variant_provides_androidmk_info_test = analysistest.make(
+    _target_provides_androidmk_info_test_impl,
+    attrs = {
+        "expected_static_libs": attr.string_list(),
+        "expected_whole_static_libs": attr.string_list(),
+        "expected_shared_libs": attr.string_list(),
+    },
+    config_settings = {
+        "@//build/bazel/rules/apex:api_domain": "unbundled_app",
+    },
+)
+
+def _test_cc_prebuilt_library_shared_is_valid_dynamic_dep():
+    name = "cc_prebuilt_library_shared_is_valid_dynamic_dep"
+    prebuilt_name = name + "_prebuilt"
+    static_name = name + "_static"
+    shared_name = name + "_shared"
+    binary_name = name + "_binary"
+    static_test_name = static_name + "_test"
+    shared_test_name = shared_name + "_test"
+    binary_test_name = binary_name + "_test"
+
+    cc_prebuilt_library_shared(
+        name = prebuilt_name,
+        shared_library = "a.so",
+        tags = ["manual"],
+    )
+    cc_library_static(
+        name = static_name,
+        srcs = ["a.cpp"],
+        dynamic_deps = [prebuilt_name],
+        tags = ["manual"],
+    )
+    cc_library_shared(
+        name = shared_name,
+        srcs = ["a.cpp"],
+        dynamic_deps = [prebuilt_name],
+        tags = ["manual"],
+    )
+    cc_binary(
+        name = binary_name,
+        srcs = ["a.cpp"],
+        dynamic_deps = [prebuilt_name],
+        tags = ["manual"],
+    )
+
+    target_under_test_exist_test(
+        name = static_test_name,
+        target_under_test = static_name,
+    )
+    target_under_test_exist_test(
+        name = shared_test_name,
+        target_under_test = shared_name,
+    )
+    target_under_test_exist_test(
+        name = binary_test_name,
+        target_under_test = binary_name,
+    )
+
+    return [
+        static_test_name,
+        shared_test_name,
+        binary_test_name,
+    ]
+
 def cc_library_common_test_suites(name):
     native.test_suite(
         name = name,
-        tests = _is_external_directory_tests(),
+        tests = (
+            _is_external_directory_tests() +
+            _test_cc_prebuilt_library_shared_is_valid_dynamic_dep()
+        ),
     )

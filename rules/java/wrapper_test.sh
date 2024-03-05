@@ -30,6 +30,10 @@ function test_wrapper_providers() {
     wrapper_providers="$(build/bazel/bin/bazel ${STARTUP_FLAGS[@]} \
     cquery ${FLAGS[@]} --config=android "${target}" \
     --starlark:expr="sorted(providers(target).keys())" --output=starlark|uniq)"
+    if [[ -z "${private_providers}" ]]; then
+      echo "Empty provider list, bazel invocation probably failed" >&2
+      exit 1
+    fi
     if [[ ! $(cmp -s <(echo "${private_providers}") <(echo "${wrapper_providers}")) ]]; then
       echo "${target} and ${target}_private should have the same providers. Diff:"
       diff <(echo "${private_providers}") <(echo "${wrapper_providers}")

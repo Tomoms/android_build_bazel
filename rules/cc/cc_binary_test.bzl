@@ -59,7 +59,7 @@ cc_binary_strip_test = analysistest.make(
     _cc_binary_strip_test,
     attrs = {
         "strip_flags": attr.string_list(),
-        "_android_constraint": attr.label(default = Label("//build/bazel/platforms/os:android")),
+        "_android_constraint": attr.label(default = Label("//build/bazel_common_rules/platforms/os:android")),
     },
 )
 
@@ -180,18 +180,29 @@ def _cc_binary_suffix_test_impl(ctx):
         len(outputs) == 1,
         "Expected 1 output file; got %s" % outputs,
     )
-    out = outputs[0].path
+    out = outputs[0]
     asserts.true(
         env,
-        out.endswith(suffix),
+        out.path.endswith(suffix),
         "Expected output filename to end in `%s`; it was instead %s" % (suffix, out),
     )
+
+    if ctx.attr.stem:
+        asserts.equals(
+            env,
+            out.basename,
+            ctx.attr.stem,
+            "Expected output filename %s to be equal to `stem` attribute %s" % (out, ctx.attr.stem),
+        )
 
     return analysistest.end(env)
 
 cc_binary_suffix_test = analysistest.make(
     _cc_binary_suffix_test_impl,
-    attrs = {"suffix": attr.string()},
+    attrs = {
+        "stem": attr.string(),
+        "suffix": attr.string(),
+    },
 )
 
 def _cc_binary_suffix():
@@ -223,6 +234,23 @@ def _cc_binary_empty_suffix():
     )
     cc_binary_suffix_test(
         name = test_name,
+        target_under_test = name,
+    )
+    return test_name
+
+def _cc_binary_with_stem():
+    name = "cc_binary_with_stem"
+    test_name = name + "_test"
+
+    cc_binary(
+        name,
+        srcs = ["src.cc"],
+        stem = "bar",
+        tags = ["manual"],
+    )
+    cc_binary_suffix_test(
+        name = test_name,
+        stem = "bar",
         target_under_test = name,
     )
     return test_name
@@ -264,8 +292,8 @@ def _cc_binary_provides_androidmk_info():
         target_under_test = name,
         expected_static_libs = [dep_name, "libc++demangle", "libunwind"],
         expected_whole_static_libs = [whole_archive_dep_name],
-        expected_shared_libs = [dynamic_dep_name, "libc++", "libc", "libdl", "libm"],
-        target_compatible_with = ["//build/bazel/platforms/os:android"],
+        expected_shared_libs = [dynamic_dep_name, "libc++", "libc_stub_libs-current", "libdl_stub_libs-current", "libm_stub_libs-current"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:android"],
     )
     target_provides_androidmk_info_test(
         name = linux_test_name,
@@ -273,12 +301,46 @@ def _cc_binary_provides_androidmk_info():
         expected_static_libs = [dep_name],
         expected_whole_static_libs = [whole_archive_dep_name],
         expected_shared_libs = [dynamic_dep_name, "libc++"],
-        target_compatible_with = ["//build/bazel/platforms/os:linux"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:linux"],
     )
     return [
         android_test_name,
         linux_test_name,
     ]
+
+def _cc_bad_linkopts_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    if ctx.target_platform_has_constraint(ctx.attr._android_constraint[platform_common.ConstraintValueInfo]):
+        asserts.expect_failure(env, "Library requested via -l is not supported for device builds. Use implementation_deps instead.")
+    else:
+        asserts.expect_failure(env, "Host library(s) requested via -l is not available in the toolchain.")
+    return analysistest.end(env)
+
+cc_bad_linkopts_test = analysistest.make(
+    _cc_bad_linkopts_test_impl,
+    expect_failure = True,
+    attrs = {
+        "_android_constraint": attr.label(
+            default = Label("//build/bazel_common_rules/platforms/os:android"),
+        ),
+    },
+)
+
+# Test that an error is raised if a user requests a library that is not available in the toolchain.
+def _cc_binary_bad_linkopts():
+    subject_name = "cc_binary_bad_linkopts"
+    test_name = subject_name + "_test"
+
+    cc_binary(
+        name = subject_name,
+        linkopts = ["-lunknown"],
+        tags = ["manual"],
+    )
+    cc_bad_linkopts_test(
+        name = test_name,
+        target_under_test = subject_name,
+    )
+    return test_name
 
 def cc_binary_test_suite(name):
     native.test_suite(
@@ -291,5 +353,7 @@ def cc_binary_test_suite(name):
             _cc_binary_strip_all(),
             _cc_binary_suffix(),
             _cc_binary_empty_suffix(),
+            _cc_binary_with_stem(),
+            _cc_binary_bad_linkopts(),
         ] + _cc_binary_provides_androidmk_info(),
     )

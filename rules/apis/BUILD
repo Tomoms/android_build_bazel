@@ -12,10 +12,3 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-
-load(":api_domain_test.bzl", "api_domain_test_suite")
-load(":cc_api_contribution_test.bzl", "cc_api_test_suite")
-
-cc_api_test_suite(name = "cc_api_test_suite")
-
-api_domain_test_suite(name = "api_domain_test_suite")

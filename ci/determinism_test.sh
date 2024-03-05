@@ -77,7 +77,7 @@ function save_hash {
   find $OUT_DIR/soong/soong_injection -type f,l | xargs "${PREBUILTS}"/md5sum >> $filepath
   "${PREBUILTS}"/md5sum $OUT_DIR/soong/Android-${TARGET_PRODUCT}.mk >> $filepath
   if [[ -z ${SKIP_NINJA_CHECK+x} ]]; then
-    "${PREBUILTS}"/md5sum $OUT_DIR/soong/build.ninja >> $filepath
+    "${PREBUILTS}"/md5sum $OUT_DIR/soong/build.${TARGET_PRODUCT}.ninja >> $filepath
   fi
 }
 

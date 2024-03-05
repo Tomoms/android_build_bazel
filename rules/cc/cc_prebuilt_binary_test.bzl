@@ -67,7 +67,7 @@ __cc_prebuilt_binary_stripping_flags_test = analysistest.make(
 
 def _cc_prebuilt_binary_stripping_flags_test(**kwargs):
     __cc_prebuilt_binary_stripping_flags_test(
-        target_compatible_with = ["//build/bazel/platforms/os:android"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:android"],
         **kwargs
     )
 
@@ -165,7 +165,7 @@ __cc_prebuilt_binary_no_stripping_action_test = analysistest.make(
 
 def _cc_prebuilt_binary_no_stripping_action_test(**kwargs):
     __cc_prebuilt_binary_no_stripping_action_test(
-        target_compatible_with = ["//build/bazel/platforms/os:android"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:android"],
         **kwargs
     )
 
@@ -187,7 +187,7 @@ def _cc_prebuilt_binary_strip_none_test():
 def _cc_prebuilt_binary_host_test(**kwargs):
     __cc_prebuilt_binary_no_stripping_action_test(
         target_compatible_with = select({
-            "//build/bazel/platforms/os:android": ["@platforms//:incompatible"],
+            "//build/bazel_common_rules/platforms/os:android": ["@platforms//:incompatible"],
             "//conditions:default": [],
         }),
         **kwargs

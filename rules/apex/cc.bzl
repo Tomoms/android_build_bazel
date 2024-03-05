@@ -13,7 +13,6 @@
 # limitations under the License.
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
-load("//build/bazel/product_config:product_variables_providing_rule.bzl", "ProductVariablesInfo")
 load("//build/bazel/rules:metadata.bzl", "MetadataFileInfo")
 load("//build/bazel/rules/cc:cc_library_common.bzl", "parse_apex_sdk_version")
 load("//build/bazel/rules/cc:cc_library_shared.bzl", "CcSharedLibraryOutputInfo", "CcStubLibrariesInfo")
@@ -184,12 +183,15 @@ def _apex_cc_aspect_impl(target, ctx):
 
             # Mark this target as required from the system either via
             # the system partition, or another APEX, and propagate this list.
+            if CcStubLibrarySharedInfo not in target:
+                fail("Analysis of target: %s in apex: %s failed. This target does not provide CcStubLibrarySharedInfo. \
+This apex should likely use stubs of the target instead." % (target, ctx.attr._apex_name[BuildSettingInfo].value))
             source_library_label = target[CcStubLibrarySharedInfo].source_library_label
 
             # If a stub library is in the "provides" of the apex, it doesn't need to be in the "requires"
             if not is_apex_direct_dep(source_library_label, ctx):
                 requires.append(source_library_label)
-                if not ctx.attr._product_variables[ProductVariablesInfo].Unbundled_build and not _installed_to_bootstrap(source_library_label):
+                if not ctx.attr._unbundled_build[BuildSettingInfo].value and not _installed_to_bootstrap(source_library_label):
                     # It's sufficient to pass the make module name, not the fully qualified bazel label.
                     make_modules_to_install.append(source_library_label.name)
 
@@ -222,16 +224,28 @@ def _apex_cc_aspect_impl(target, ctx):
             stripped = target[CcSharedLibraryOutputInfo].output_file,
             unstripped = target[CcUnstrippedInfo].unstripped,
             metadata_file = target[MetadataFileInfo].metadata_file,
+            generating_rule_owner = target[CcSharedLibraryOutputInfo].output_file.owner,
         ))
         if hasattr(ctx.rule.attr, "shared"):
             transitive_deps.append(ctx.rule.attr.shared[0])
+    elif ctx.rule.kind == "cc_prebuilt_library_shared":
+        files = target[DefaultInfo].files.to_list()
+        if len(files) != 1:
+            fail("expected only 1 file in %s[DefaultInfo].files, but got %d" % (target.label, len(files)))
+        shared_object_files.append(struct(
+            # TODO: This file needs to actually be stripped.
+            stripped = files[0],
+            unstripped = files[0],
+            metadata_file = None,
+            # Normally the generating_rule_owner is the owner of the stripped
+            # output file, but the owner of files[0] has slashes in its name,
+            # and the APEX's make_module_name must not contain a slash.
+            generating_rule_owner = target.label,
+        ))
     elif ctx.rule.kind in ["cc_shared_library", "cc_binary"]:
-        # Propagate along the dynamic_deps and deps edges for binaries and shared libs
+        # Propagate along the dynamic_deps edges for binaries and shared libs
         if hasattr(ctx.rule.attr, "dynamic_deps"):
             for dep in ctx.rule.attr.dynamic_deps:
-                transitive_deps.append(dep)
-        if hasattr(ctx.rule.attr, "deps"):
-            for dep in ctx.rule.attr.deps:
                 transitive_deps.append(dep)
     elif ctx.rule.kind in rules_propagate_src and hasattr(ctx.rule.attr, "src"):
         # Propagate along the src edge
@@ -240,7 +254,9 @@ def _apex_cc_aspect_impl(target, ctx):
         else:
             transitive_deps.append(ctx.rule.attr.src)
 
-    if ctx.rule.kind in ["stripped_binary", "_cc_library_shared_proxy", "_cc_library_combiner"] and hasattr(ctx.rule.attr, "runtime_deps"):
+    # We only collect runtime dependencies from binaries and shared libraries,
+    # we _explicitly_ omit static libraries (kind = _cc_library_combiner)
+    if ctx.rule.kind in ["stripped_binary", "_cc_library_shared_proxy"] and hasattr(ctx.rule.attr, "runtime_deps"):
         for dep in ctx.rule.attr.runtime_deps:
             unstripped = None
             if CcUnstrippedInfo in dep:
@@ -251,6 +267,7 @@ def _apex_cc_aspect_impl(target, ctx):
                         stripped = output_file,
                         unstripped = unstripped,
                         metadata_file = dep[MetadataFileInfo].metadata_file,
+                        generating_rule_owner = output_file.owner,
                     ))
             transitive_deps.append(dep)
 
@@ -298,7 +315,7 @@ apex_cc_aspect = aspect(
         "_apex_direct_deps": attr.label(default = "//build/bazel/rules/apex:apex_direct_deps"),
         "_apex_name": attr.label(default = "//build/bazel/rules/apex:apex_name"),
         "_min_sdk_version": attr.label(default = "//build/bazel/rules/apex:min_sdk_version"),
-        "_product_variables": attr.label(default = "//build/bazel/product_config:product_vars"),
+        "_unbundled_build": attr.label(default = "//build/bazel/product_config:unbundled_build"),
     },
     attr_aspects = CC_ATTR_ASPECTS,
     requires = [license_aspect],

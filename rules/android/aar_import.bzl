@@ -15,7 +15,8 @@
 """Macro wrapping the aar_import for bp2build. """
 
 load("//build/bazel/rules/android/aar_import_aosp_internal:rule.bzl", _aar_import = "aar_import")
-load("//build/bazel/rules/java:sdk_transition.bzl", "sdk_transition", "sdk_transition_attrs")
+load("//build/bazel/rules/java:sdk_transition.bzl", "sdk_transition_attrs")
+load("@rules_android//rules:providers.bzl", "StarlarkAndroidResourcesInfo")
 
 # TODO(b/277801336): document these attributes.
 def aar_import(
@@ -61,6 +62,7 @@ def _aar_import_sdk_transition_impl(ctx):
         ctx.attr.exports[0][ProguardSpecProvider],
         ctx.attr.exports[0][AndroidIdeInfo],
         ctx.attr.exports[0][DefaultInfo],
+        ctx.attr.exports[0][StarlarkAndroidResourcesInfo],
     ]
 
 aar_import_sdk_transition = rule(

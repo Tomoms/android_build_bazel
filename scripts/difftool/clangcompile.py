@@ -42,30 +42,49 @@ class ClangCompileInfo(CommandInfo):
     isystem_includes = []
     defines = []
     warnings = []
+    features = []
+    libraries = []
+    linker_args = []
+    assembler_args = []
     file_flags = []
     for g in flag_groups:
       if is_flag_starts_with("D", g) or is_flag_starts_with("U", g):
         defines += [g]
+      elif is_flag_starts_with("f", g):
+        features += [g]
+      elif is_flag_starts_with("l", g):
+        libraries += [g]
+      elif is_flag_starts_with("Wl", g):
+        linker_args += [g]
+      elif is_flag_starts_with("Wa", g) and not is_flag_starts_with("Wall", g):
+        assembler_args += [g]
+      elif is_flag_starts_with("W", g) or is_flag_starts_with("w", g):
+        warnings += [g]
       elif is_flag_starts_with("I", g):
         i_includes += [g]
       elif is_flag_starts_with("isystem", g):
         isystem_includes += [g]
       elif is_flag_starts_with("iquote", g):
         iquote_includes += [g]
-      elif is_flag_starts_with("W", g) or is_flag_starts_with("w", g):
-        warnings += [g]
-      elif (is_flag_starts_with("MF", g) or is_flag_starts_with("o", g) or
-            _is_src_group(g)):
+      elif (
+          is_flag_starts_with("MF", g)
+          or is_flag_starts_with("o", g)
+          or _is_src_group(g)
+      ):
         file_flags += [g]
       else:
         misc += [g]
-    self.misc_flags = sorted(misc, key=flag_repr)
+    self.features = features
+    self.defines = _process_defines(defines)
+    self.libraries = libraries
+    self.linker_args = linker_args
+    self.assembler_args = assembler_args
     self.i_includes = _process_includes(i_includes)
     self.iquote_includes = _process_includes(iquote_includes)
     self.isystem_includes = _process_includes(isystem_includes)
-    self.defines = _process_defines(defines)
-    self.warnings = warnings
     self.file_flags = file_flags
+    self.warnings = warnings
+    self.misc_flags = sorted(misc, key=flag_repr)
 
   def _str_for_field(self, field_name, values):
     s = "  " + field_name + ":\n"
@@ -75,18 +94,38 @@ class ClangCompileInfo(CommandInfo):
 
   def __str__(self):
     s = "ClangCompileInfo:\n"
-    s += self._str_for_field("Includes (-I)", self.i_includes)
-    s += self._str_for_field("Includes (-iquote)", self.iquote_includes)
-    s += self._str_for_field("Includes (-isystem)", self.isystem_includes)
-    s += self._str_for_field("Defines", self.defines)
-    s += self._str_for_field("Warnings", self.warnings)
-    s += self._str_for_field("Files", self.file_flags)
-    s += self._str_for_field("Misc", self.misc_flags)
+
+    for label, fields in {
+        "Features": self.features,
+        "Defines": self.defines,
+        "Libraries": self.libraries,
+        "Linker args": self.linker_args,
+        "Assembler args": self.assembler_args,
+        "Includes (-I,": self.i_includes,
+        "Includes (-iquote,": self.iquote_includes,
+        "Includes (-isystem,": self.isystem_includes,
+        "Files": self.file_flags,
+        "Warnings": self.warnings,
+        "Misc": self.misc_flags,
+    }.items():
+      if len(fields) > 0:
+        s += self._str_for_field(label, list(set(fields)))
+
     return s
 
   def compare(self, other):
     """computes difference in arguments from another ClangCompileInfo"""
     diffs = ClangCompileInfo(self.tool, [])
+    diffs.defines = [i for i in self.defines if i not in other.defines]
+    diffs.warnings = [i for i in self.warnings if i not in other.warnings]
+    diffs.features = [i for i in self.features if i not in other.features]
+    diffs.libraries = [i for i in self.libraries if i not in other.libraries]
+    diffs.linker_args = [
+        i for i in self.linker_args if i not in other.linker_args
+    ]
+    diffs.assembler_args = [
+        i for i in self.assembler_args if i not in other.assembler_args
+    ]
     diffs.i_includes = [i for i in self.i_includes if i not in other.i_includes]
     diffs.iquote_includes = [
         i for i in self.iquote_includes if i not in other.iquote_includes
@@ -94,8 +133,6 @@ class ClangCompileInfo(CommandInfo):
     diffs.isystem_includes = [
         i for i in self.isystem_includes if i not in other.isystem_includes
     ]
-    diffs.defines = [i for i in self.defines if i not in other.defines]
-    diffs.warnings = [i for i in self.warnings if i not in other.warnings]
     diffs.file_flags = [i for i in self.file_flags if i not in other.file_flags]
     diffs.misc_flags = [i for i in self.misc_flags if i not in other.misc_flags]
     return diffs
@@ -118,7 +155,7 @@ def _custom_flag_group(x):
   if x.startswith("-I") and len(x) > 2:
     return ("I", x[2:])
   if x.startswith("-W") and len(x) > 2:
-    return (x)
+    return x
   elif x == "-c":
     return x
   return None
@@ -157,37 +194,42 @@ def _process_includes(includes):
 
 def _external_tool(*args) -> ExtractInfo:
   return lambda file: subprocess.run(
-      [*args, str(file)
-      ], check=True, capture_output=True, encoding="utf-8").stdout.splitlines()
+      [*args, str(file)], check=True, capture_output=True, encoding="utf-8"
+  ).stdout.splitlines()
 
 
 # TODO(usta) use nm as a data dependency
-def nm_differences(left_path: pathlib.Path,
-                   right_path: pathlib.Path) -> list[str]:
+def nm_differences(
+    left_path: pathlib.Path, right_path: pathlib.Path
+) -> list[str]:
   """Returns differences in symbol tables.
 
   Returns the empty list if these files are deemed "similar enough".
   """
-  return NmSymbolDiff(_external_tool("nm"),
-                      "symbol tables").diff(left_path, right_path)
+  return NmSymbolDiff(_external_tool("nm"), "symbol tables").diff(
+      left_path, right_path
+  )
 
 
 # TODO(usta) use readelf as a data dependency
-def elf_differences(left_path: pathlib.Path,
-                    right_path: pathlib.Path) -> list[str]:
+def elf_differences(
+    left_path: pathlib.Path, right_path: pathlib.Path
+) -> list[str]:
   """Returns differences in elf headers.
 
   Returns the empty list if these files are deemed "similar enough".
 
   The given files must exist and must be object (.o) files.
   """
-  return ContextDiff(_external_tool("readelf", "-h"),
-                     "elf headers").diff(left_path, right_path)
+  return ContextDiff(_external_tool("readelf", "-h"), "elf headers").diff(
+      left_path, right_path
+  )
 
 
 # TODO(usta) use bloaty as a data dependency
-def bloaty_differences(left_path: pathlib.Path,
-                       right_path: pathlib.Path) -> list[str]:
+def bloaty_differences(
+    left_path: pathlib.Path, right_path: pathlib.Path
+) -> list[str]:
   """Returns differences in symbol and section tables.
 
   Returns the empty list if these files are deemed "similar enough".
@@ -198,8 +240,9 @@ def bloaty_differences(left_path: pathlib.Path,
 
 
 # TODO(usta) use bloaty as a data dependency
-def bloaty_differences_compileunits(left_path: pathlib.Path,
-                                    right_path: pathlib.Path) -> list[str]:
+def bloaty_differences_compileunits(
+    left_path: pathlib.Path, right_path: pathlib.Path
+) -> list[str]:
   """Returns differences in symbol and section tables.
 
   Returns the empty list if these files are deemed "similar enough".
@@ -210,16 +253,16 @@ def bloaty_differences_compileunits(left_path: pathlib.Path,
 
 
 # TODO(usta) use bloaty as a data dependency
-def _bloaty_differences(left_path: pathlib.Path,
-                        right_path: pathlib.Path,
-                        debug=False) -> list[str]:
+def _bloaty_differences(
+    left_path: pathlib.Path, right_path: pathlib.Path, debug=False
+) -> list[str]:
   symbols = BloatyDiff(
-      "symbol tables", "symbols",
-      has_debug_symbols=debug).diff(left_path, right_path)
+      "symbol tables", "symbols", has_debug_symbols=debug
+  ).diff(left_path, right_path)
   sections = BloatyDiff(
-      "section tables", "sections",
-      has_debug_symbols=debug).diff(left_path, right_path)
+      "section tables", "sections", has_debug_symbols=debug
+  ).diff(left_path, right_path)
   segments = BloatyDiff(
-      "segment tables", "segments",
-      has_debug_symbols=debug).diff(left_path, right_path)
+      "segment tables", "segments", has_debug_symbols=debug
+  ).diff(left_path, right_path)
   return symbols + sections + segments

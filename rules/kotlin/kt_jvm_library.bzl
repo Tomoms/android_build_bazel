@@ -15,49 +15,23 @@ limitations under the License.
 """
 
 load("@rules_kotlin//kotlin:compiler_opt.bzl", "kt_compiler_opt")
-load("@rules_kotlin//kotlin:jvm_library.bzl", _kt_jvm_library = "kt_jvm_library")
-load("//build/bazel/rules/java:rules.bzl", "java_import")
-load("//build/bazel/rules/java:sdk_transition.bzl", "sdk_transition", "sdk_transition_attrs")
+load("@rules_kotlin//kotlin:rules.bzl", _kt_jvm_library = "kt_jvm_library")
+load("//build/bazel/rules/java:java_resources.bzl", "java_resources")
+load("//build/bazel/rules/java:sdk_transition.bzl", "sdk_transition_attrs")
 
-def _kotlin_resources_impl(ctx):
-    output_file = ctx.actions.declare_file("kt_resources.jar")
+def make_kt_compiler_opt(
+        name,
+        kotlincflags = None):
+    custom_kotlincopts = None
+    if kotlincflags != None:
+        ktcopts_name = name + "_kotlincopts"
+        kt_compiler_opt(
+            name = ktcopts_name,
+            opts = kotlincflags,
+        )
+        custom_kotlincopts = [":" + ktcopts_name]
 
-    args = ctx.actions.args()
-    args.add("cvf")
-    args.add(output_file.path)
-    args.add("-C")
-    args.add(ctx.attr.resource_strip_prefix)
-    args.add(".")
-
-    ctx.actions.run(
-        outputs = [output_file],
-        inputs = ctx.files.srcs,
-        executable = ctx.executable._jar,
-        arguments = [args],
-    )
-
-    return [DefaultInfo(files = depset([output_file]))]
-
-kotlin_resources = rule(
-    doc = """
-    Package srcs into a jar, with the option of stripping a path prefix
-    """,
-    implementation = _kotlin_resources_impl,
-    attrs = {
-        "srcs": attr.label_list(allow_files = True),
-        "resource_strip_prefix": attr.string(
-            doc = """The path prefix to strip from resources.
-                   If specified, this path prefix is stripped from every fil
-                   in the resources attribute. It is an error for a resource
-                   file not to be under this directory. If not specified
-                   (the default), the path of resource file is determined
-                   according to the same logic as the Java package of source
-                   files. For example, a source file at stuff/java/foo/bar/a.txt
-                    will be located at foo/bar/a.txt.""",
-        ),
-        "_jar": attr.label(default = "@bazel_tools//tools/jdk:jar", executable = True, cfg = "exec"),
-    },
-)
+    return custom_kotlincopts
 
 # TODO(b/277801336): document these attributes.
 def kt_jvm_library(
@@ -68,41 +42,44 @@ def kt_jvm_library(
         kotlincflags = None,
         java_version = None,
         sdk_version = None,
+        javacopts = [],
+        errorprone_force_enable = None,
         tags = [],
         target_compatible_with = [],
         visibility = None,
         **kwargs):
-    "Bazel macro wrapping for kt_jvm_library"
-    if resource_strip_prefix != None:
-        java_import_name = name + "resources"
-        kt_res_jar_name = name + "resources_jar"
-        java_import(
-            name = java_import_name,
-            jars = [":" + kt_res_jar_name],
-        )
+    """Bazel macro wrapping for kt_jvm_library
 
-        kotlin_resources(
+        Attributes:
+            errorprone_force_enable: set this to true to always run Error Prone
+            on this target (overriding the value of environment variable
+            RUN_ERROR_PRONE). Error Prone can be force disabled for an individual
+            module by adding the "-XepDisableAllChecks" flag to javacopts
+        """
+    if resource_strip_prefix != None:
+        kt_res_jar_name = name + "__kt_res_jar"
+
+        java_resources(
             name = kt_res_jar_name,
-            srcs = resources,
+            resources = resources,
             resource_strip_prefix = resource_strip_prefix,
         )
 
-        deps = deps + [":" + java_import_name]
+        deps = deps + [":" + kt_res_jar_name]
 
-    custom_kotlincopts = None
-    if kotlincflags != None:
-        ktcopts_name = name + "_kotlincopts"
-        kt_compiler_opt(
-            name = ktcopts_name,
-            opts = kotlincflags,
-        )
-        custom_kotlincopts = [":" + ktcopts_name]
+    custom_kotlincopts = make_kt_compiler_opt(name, kotlincflags)
+
+    opts = javacopts
+    if errorprone_force_enable == None:
+        # TODO (b/227504307) temporarily disable errorprone until environment variable is handled
+        opts = opts + ["-XepDisableAllChecks"]
 
     lib_name = name + "_private"
     _kt_jvm_library(
         name = lib_name,
         deps = deps,
         custom_kotlincopts = custom_kotlincopts,
+        javacopts = opts,
         tags = tags + ["manual"],
         target_compatible_with = target_compatible_with,
         visibility = ["//visibility:private"],

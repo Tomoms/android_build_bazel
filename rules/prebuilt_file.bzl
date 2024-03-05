@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+Contains prebuilt_file rule that handles prebuilt artifacts installation.
+"""
+
 PrebuiltFileInfo = provider(
     "Info needed for prebuilt_file modules",
     fields = {
@@ -21,12 +25,10 @@ PrebuiltFileInfo = provider(
         "installable": "Whether this is directly installable into one of the partitions",
     },
 )
-_handled_dirs = ["etc", "usr/share"]
+_handled_dirs = ["etc", "usr/share", "."]
 
 def _prebuilt_file_rule_impl(ctx):
-    srcs = ctx.files.src
-    if len(srcs) != 1:
-        fail("src for", ctx.label.name, "is expected to be singular, but is of len", len(srcs), ":\n", srcs)
+    src = ctx.file.src
 
     # Is this an acceptable directory, or a subdir under one?
     dir = ctx.attr.dir
@@ -43,19 +45,22 @@ def _prebuilt_file_rule_impl(ctx):
     elif ctx.attr.filename != "":
         filename = ctx.attr.filename
     elif ctx.attr.filename_from_src:
-        filename = srcs[0].basename
+        filename = src.basename
     else:
         filename = ctx.attr.name
 
+    if "/" in filename:
+        fail("filename cannot contain separator '/'")
+
     return [
         PrebuiltFileInfo(
-            src = srcs[0],
+            src = src,
             dir = dir,
             filename = filename,
             installable = ctx.attr.installable,
         ),
         DefaultInfo(
-            files = depset(srcs),
+            files = depset([src]),
         ),
     ]
 
@@ -64,9 +69,7 @@ _prebuilt_file = rule(
     attrs = {
         "src": attr.label(
             mandatory = True,
-            allow_files = True,
-            # TODO(b/217908237): reenable allow_single_file
-            # allow_single_file = True,
+            allow_single_file = True,
         ),
         "dir": attr.string(mandatory = True),
         "filename": attr.string(),
@@ -81,9 +84,9 @@ def prebuilt_file(
         dir,
         filename = None,
         installable = True,
+        filename_from_src = False,
         # TODO(b/207489266): Fully support;
         # data is currently dropped to prevent breakages from e.g. prebuilt_etc
-        filename_from_src = False,
         data = [],  # @unused
         **kwargs):
     "Bazel macro to correspond with the e.g. prebuilt_etc and prebuilt_usr_share Soong modules."

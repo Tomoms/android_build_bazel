@@ -26,6 +26,7 @@ load("//build/bazel/rules/cc:cc_library_headers.bzl", "cc_library_headers")
 load("//build/bazel/rules/cc:cc_library_shared.bzl", "cc_library_shared")
 load("//build/bazel/rules/cc:cc_library_static.bzl", "cc_library_static")
 load("//build/bazel/rules/cc:cc_stub_library.bzl", "cc_stub_suite")
+load("//build/bazel/rules/test_common:flags.bzl", "action_flags_present_only_for_mnemonic_test")
 load("//build/bazel/rules/test_common:rules.bzl", "expect_failure_test", "target_under_test_exist_test")
 load(":apex_deps_validation.bzl", "ApexDepsInfo", "apex_dep_infos_to_allowlist_strings")
 load(":apex_info.bzl", "ApexInfo", "ApexMkInfo")
@@ -191,7 +192,7 @@ def _test_canned_fs_config_binaries():
             "/lib{64_OR_BLANK} 0 2000 0755",
             "",  # ends with a newline
         ],
-        target_compatible_with = ["//build/bazel/platforms/os:android"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:android"],
     )
 
     return test_name
@@ -230,7 +231,7 @@ def _test_canned_fs_config_native_shared_libs_arm():
             "/lib 0 2000 0755",
             "",  # ends with a newline
         ],
-        target_compatible_with = ["//build/bazel/platforms/arch:arm"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/arch:arm"],
     )
 
     return test_name
@@ -272,7 +273,7 @@ def _test_canned_fs_config_native_shared_libs_arm64():
             "/lib64 0 2000 0755",
             "",  # ends with a newline
         ],
-        target_compatible_with = ["//build/bazel/platforms/arch:arm64"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/arch:arm64"],
     )
 
     return test_name
@@ -436,14 +437,13 @@ def _test_canned_fs_config_runtime_deps():
             "/apex_manifest.pb 1000 1000 0644",
             "/lib{64_OR_BLANK}/%s_runtime_dep_1.so 1000 1000 0644" % name,
             "/lib{64_OR_BLANK}/%s_runtime_dep_2.so 1000 1000 0644" % name,
-            "/lib{64_OR_BLANK}/%s_runtime_dep_3.so 1000 1000 0644" % name,
             "/lib{64_OR_BLANK}/libc++.so 1000 1000 0644",
             "/bin/%s_bin_cc 0 2000 0755" % name,
             "/bin 0 2000 0755",
             "/lib{64_OR_BLANK} 0 2000 0755",
             "",  # ends with a newline
         ],
-        target_compatible_with = ["//build/bazel/platforms/os:android"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:android"],
     )
 
     return test_name
@@ -502,7 +502,7 @@ apex_manifest_global_min_sdk_current_test = analysistest.make(
 
 apex_manifest_global_min_sdk_override_tiramisu_test = analysistest.make(
     config_settings = {
-        "@//build/bazel/rules/apex:apex_global_min_sdk_version_override": "Tiramisu",
+        "//command_line_option:platforms": "@//build/bazel/tests/products:aosp_arm64_for_testing_min_sdk_version_override_tiramisu",
         "@//build/bazel/rules/apex:unbundled_build_target_sdk_with_api_fingerprint": False,
     },
     **apex_manifest_test_attr
@@ -782,7 +782,7 @@ def _test_apex_manifest_dependencies_requires():
         requires_native_libs = [name + "_libfoo"],
         provides_native_libs = [name + "_lib_with_dep"],
         make_modules_to_install = [name + "_libfoo"],
-        target_compatible_with = ["//build/bazel/platforms/os:android"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:android"],
     )
 
     return test_name
@@ -905,7 +905,7 @@ def _test_apex_manifest_dependencies_selfcontained():
             name + "_libfoo",
         ],
         make_modules_to_install = [],
-        target_compatible_with = ["//build/bazel/platforms/os:android"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:android"],
     )
 
     return test_name
@@ -1000,7 +1000,7 @@ def _test_apex_manifest_dependencies_cc_binary():
             name + "_librequires",
             name + "_librequires2",
         ],
-        target_compatible_with = ["//build/bazel/platforms/os:android"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:android"],
     )
 
     return test_name
@@ -1376,6 +1376,12 @@ def _test_apex_certificate_label_with_overrides():
         tags = ["manual"],
     )
 
+    android_app_certificate(
+        name = name + "_another_cert",
+        certificate = name + "_another_cert",
+        tags = ["manual"],
+    )
+
     test_apex(
         name = name,
         certificate = name + "_cert",
@@ -1384,8 +1390,8 @@ def _test_apex_certificate_label_with_overrides():
     apex_certificate_with_overrides_test(
         name = test_name,
         target_under_test = name,
-        expected_pem_path = "build/bazel/rules/apex/testdata/another.x509.pem",
-        expected_pk8_path = "build/bazel/rules/apex/testdata/another.pk8",
+        expected_pem_path = "build/bazel/rules/apex/apex_certificate_label_with_overrides_another_cert.x509.pem",
+        expected_pk8_path = "build/bazel/rules/apex/apex_certificate_label_with_overrides_another_cert.pk8",
     )
 
     return test_name
@@ -1467,7 +1473,7 @@ min_sdk_version_apex_inherit_test = analysistest.make(
 
 min_sdk_version_apex_inherit_override_min_sdk_tiramisu_test = analysistest.make(
     config_settings = {
-        "@//build/bazel/rules/apex:apex_global_min_sdk_version_override": "Tiramisu",
+        "//command_line_option:platforms": "@//build/bazel/tests/products:aosp_arm64_for_testing_min_sdk_version_override_tiramisu",
     },
     **min_sdk_version_apex_inherit_test_attrs
 )
@@ -1900,7 +1906,7 @@ def _test_apex_available():
     )
     cc_library_headers(
         name = lib_headers_name,
-        absolute_includes = ["include_dir"],
+        export_absolute_includes = ["include_dir"],
         tags = [
             "manual",
             "apex_available_checked_manual_for_testing",
@@ -1963,7 +1969,7 @@ def _test_apex_available_failure():
     )
     cc_library_headers(
         name = lib_headers_name,
-        absolute_includes = ["include_dir"],
+        export_absolute_includes = ["include_dir"],
         tags = [
             "manual",
             "apex_available_checked_manual_for_testing",
@@ -2269,14 +2275,14 @@ def _test_apex_transition():
     apex_transition_test(
         name = test_name + "_32",
         target_under_test = name,
-        target_compatible_with = ["//build/bazel/platforms/os:android", "//build/bazel/platforms/arch:arm"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:android", "//build/bazel_common_rules/platforms/arch:arm"],
         expected = ["-march=armv7-a"],
     )
 
     apex_transition_test(
         name = test_name + "_64",
         target_under_test = name,
-        target_compatible_with = ["//build/bazel/platforms/os:android", "//build/bazel/platforms/arch:arm64"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:android", "//build/bazel_common_rules/platforms/arch:arm64"],
         expected = ["-march=armv8-a"],
     )
 
@@ -2719,7 +2725,7 @@ def _apex_sbom_test(ctx):
         "build/bazel/rules/apex/apex_sbom.apex",
         "build/bazel/rules/apex/apex_sbom.apex-sbom-metadata.csv",
         "build/make/tools/sbom/generate-sbom",
-        "build/bazel/rules/apex/apex_sbom_lib_cc.so",
+        "build/bazel/rules/apex/apex_sbom_lib_cc/apex_sbom_lib_cc.so",
         "build/bazel/rules/apex/METADATA",
     ]
     asserts.true(
@@ -2764,6 +2770,26 @@ def _test_apex_sbom():
     apex_sbom_test(
         name = test_name,
         target_under_test = name,
+    )
+
+    return test_name
+
+def _test_apex_variant_version():
+    name = "apex_variant_version"
+    test_name = name + "_test"
+
+    test_apex(
+        name = name,
+        variant_version = "3",
+    )
+
+    expected_manifest_version = default_manifest_version + 3
+
+    action_flags_present_only_for_mnemonic_test(
+        name = test_name,
+        target_under_test = name,
+        mnemonics = ["ApexManifestModify"],
+        expected_flags = ["-se", "version", "0", str(expected_manifest_version)],
     )
 
     return test_name
@@ -2826,5 +2852,6 @@ def apex_test_suite(name):
             _test_min_target_sdk_version_api_fingerprint_min_sdk_version_specified(),
             _test_min_target_sdk_version_api_fingerprint_min_sdk_version_not_specified(),
             _test_apex_sbom(),
+            _test_apex_variant_version(),
         ] + _test_apex_transition(),
     )

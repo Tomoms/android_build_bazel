@@ -204,7 +204,7 @@ cc_aidl_code_gen = rule(
             allow_single_file = True,
             executable = True,
             cfg = "exec",
-            default = Label("//prebuilts/build-tools:linux-x86/bin/aidl"),
+            default = Label("//system/tools/aidl"),
         ),
     },
     provides = [CcInfo],

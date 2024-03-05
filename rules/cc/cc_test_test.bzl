@@ -47,7 +47,8 @@ def _cc_test_provides_androidmk_info():
         deps = [dep_name],
         whole_archive_deps = [whole_archive_dep_name],
         dynamic_deps = [dynamic_dep_name],
-        target_compatible_with = ["//build/bazel/platforms/os:linux"],
+        runs_on = ["host_without_device", "device"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:linux"],
         tags = ["manual"],
     )
     android_test_name = name + "_android"
@@ -58,7 +59,7 @@ def _cc_test_provides_androidmk_info():
         expected_static_libs = [dep_name, "libgtest_main", "libgtest", "libc++demangle", "libunwind"],
         expected_whole_static_libs = [whole_archive_dep_name],
         expected_shared_libs = [dynamic_dep_name, "libc++", "libc", "libdl", "libm"],
-        target_compatible_with = ["//build/bazel/platforms/os:android"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:android"],
     )
     target_provides_androidmk_info_test(
         name = linux_test_name,
@@ -66,7 +67,7 @@ def _cc_test_provides_androidmk_info():
         expected_static_libs = [dep_name, "libgtest_main", "libgtest"],
         expected_whole_static_libs = [whole_archive_dep_name],
         expected_shared_libs = [dynamic_dep_name, "libc++"],
-        target_compatible_with = ["//build/bazel/platforms/os:linux"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:linux"],
     )
     return [
         android_test_name,

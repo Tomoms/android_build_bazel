@@ -16,6 +16,7 @@ limitations under the License.
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load(":hidl_library.bzl", "HidlInfo", "hidl_library")
+load(":hidl_package_root.bzl", "hidl_package_root")
 
 SRC_NAME = "src.hal"
 DEP1_NAME = "dep1.hal"
@@ -24,15 +25,39 @@ DEP3_NAME = "dep3.hal"
 ROOT = "android.hardware"
 ROOT_INTERFACE_FILE_LABEL = "//hardware/interfaces:current.txt"
 ROOT_INTERFACE_FILE = "hardware/interfaces/current.txt"
+ROOT_INTERFACE_PATH = "hardware/interfaces"
 ROOT_ARGUMENT = "android.hardware:hardware/interfaces"
 ROOT1 = "android.system"
 ROOT1_INTERFACE_FILE_LABEL = "//system/hardware/interfaces:current.txt"
 ROOT1_INTERFACE_FILE = "system/hardware/interfaces/current.txt"
+ROOT1_INTERFACE_PATH = "system/hardware/interfaces"
 ROOT1_ARGUMENT = "android.system:system/hardware/interfaces"
 ROOT2 = "android.hidl"
 ROOT2_INTERFACE_FILE_LABEL = "//system/libhidl/transport:current.txt"
 ROOT2_INTERFACE_FILE = "system/libhidl/transport/current.txt"
+ROOT2_INTERFACE_PATH = "system/libhidl/transport"
 ROOT2_ARGUMENT = "android.hidl:system/libhidl/transport"
+
+def _setup_roots():
+    hidl_package_root(
+        name = ROOT,
+        current = ROOT_INTERFACE_FILE_LABEL,
+        path = ROOT_INTERFACE_PATH,
+    )
+
+    hidl_package_root(
+        name = ROOT1,
+        current = ROOT1_INTERFACE_FILE_LABEL,
+        path = ROOT1_INTERFACE_PATH,
+        tags = ["manual"],
+    )
+
+    hidl_package_root(
+        name = ROOT2,
+        current = ROOT2_INTERFACE_FILE_LABEL,
+        path = ROOT2_INTERFACE_PATH,
+        tags = ["manual"],
+    )
 
 def _hidl_info_simple_test_impl(ctx):
     env = analysistest.begin(ctx)
@@ -66,24 +91,13 @@ def _hidl_info_simple_test_impl(ctx):
 
     asserts.equals(
         env,
-        expected = [
-            ROOT,
-            Label(ROOT_INTERFACE_FILE_LABEL),
-        ],
-        actual = [
-            target_under_test[HidlInfo].root,
-            target_under_test[HidlInfo].root_interface_file.label,
-        ],
-    )
-
-    asserts.equals(
-        env,
         expected = sorted([
             ROOT1_ARGUMENT,
             ROOT2_ARGUMENT,
             ROOT_ARGUMENT,
         ]),
         actual = sorted(target_under_test[HidlInfo].transitive_roots.to_list()),
+        msg = "arguments",
     )
 
     asserts.equals(
@@ -97,6 +111,7 @@ def _hidl_info_simple_test_impl(ctx):
             file.short_path
             for file in target_under_test[HidlInfo].transitive_root_interface_files.to_list()
         ]),
+        msg = "interface files",
     )
 
     return analysistest.end(env)
@@ -120,14 +135,12 @@ def _test_hidl_info_simple():
             ":" + dep2,
         ],
         root = ROOT,
-        root_interface_file = ROOT_INTERFACE_FILE_LABEL,
         tags = ["manual"],
     )
     hidl_library(
         name = dep1,
         srcs = [DEP1_NAME],
         root = ROOT1,
-        root_interface_file = ROOT1_INTERFACE_FILE_LABEL,
         tags = ["manual"],
     )
     hidl_library(
@@ -137,14 +150,12 @@ def _test_hidl_info_simple():
             ":" + dep3,
         ],
         root = ROOT2,
-        root_interface_file = ROOT2_INTERFACE_FILE_LABEL,
         tags = ["manual"],
     )
     hidl_library(
         name = dep3,
         srcs = [DEP3_NAME],
         root = ROOT2,
-        root_interface_file = ROOT2_INTERFACE_FILE_LABEL,
         tags = ["manual"],
     )
     hidl_info_simple_test(
@@ -155,6 +166,7 @@ def _test_hidl_info_simple():
     return test_name
 
 def hidl_library_test_suite(name):
+    _setup_roots()
     native.test_suite(
         name = name,
         tests = [

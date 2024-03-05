@@ -18,6 +18,7 @@ load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("//build/bazel/rules:hidl_file_utils.bzl", "INTERFACE_HEADER_PREFIXES", "TYPE_HEADER_PREFIXES")
 load("//build/bazel/rules/hidl:hidl_interface.bzl", "INTERFACE_SUFFIX")
 load("//build/bazel/rules/hidl:hidl_library.bzl", "hidl_library")
+load("//build/bazel/rules/hidl:hidl_package_root.bzl", "hidl_package_root")
 load(":cc_hidl_library.bzl", "CC_HEADER_SUFFIX", "cc_hidl_library")
 
 HIDL_GEN = "prebuilts/build-tools/linux-x86/bin/hidl-gen"
@@ -29,6 +30,7 @@ GEN_INTERFACE_NAME_1 = "Interface_1.h"
 ROOT_1 = "android.hardware"
 ROOT_INTERFACE_FILE_LABEL_1 = "//hardware/interfaces:current.txt"
 ROOT_INTERFACE_FILE_1 = "hardware/interfaces/current.txt"
+ROOT_INTERFACE_PATH_1 = "hardware/interfaces"
 INTERFACE_PACKAGE_NAME_1 = "android.hardware.int1"
 ROOT_ARGUMENT_1 = "android.hardware:hardware/interfaces"
 
@@ -37,6 +39,7 @@ SRC_INTERFACE_NAME_2 = "IInterface_2.hal"
 ROOT_2 = "android.hidl"
 ROOT_INTERFACE_FILE_LABEL_2 = "//system/libhidl/transport:current.txt"
 ROOT_INTERFACE_FILE_2 = "system/libhidl/transport/current.txt"
+ROOT_INTERFACE_PATH_2 = "system/libhidl/transport"
 ROOT_ARGUMENT_2 = "android.hidl:system/libhidl/transport"
 INTERFACE_PACKAGE_NAME_2 = "android.hidl.int2"
 
@@ -44,6 +47,21 @@ INTERFACE_PACKAGE_NAME_CORE = "android.hidl.base"
 
 INTERFACE_VERSION_1_0 = "1.0"
 INTERFACE_VERSION_1_1 = "1.1"
+
+def _setup_roots():
+    hidl_package_root(
+        name = ROOT_1,
+        current = ROOT_INTERFACE_FILE_LABEL_1,
+        path = ROOT_INTERFACE_PATH_1,
+        tags = ["manual"],
+    )
+
+    hidl_package_root(
+        name = ROOT_2,
+        current = ROOT_INTERFACE_FILE_LABEL_2,
+        path = ROOT_INTERFACE_PATH_2,
+        tags = ["manual"],
+    )
 
 def _cc_code_gen_test_impl(ctx):
     env = analysistest.begin(ctx)
@@ -183,7 +201,6 @@ def _test_cc_code_gen():
     hidl_library(
         name = interface_name_dep,
         root = ROOT_2,
-        root_interface_file = ROOT_INTERFACE_FILE_LABEL_2,
         fq_name = cc_name_dep,
         srcs = [
             SRC_TYPE_NAME_2,
@@ -202,7 +219,6 @@ def _test_cc_code_gen():
         name = interface_name,
         deps = [interface_name_dep],
         root = ROOT_1,
-        root_interface_file = ROOT_INTERFACE_FILE_LABEL_1,
         fq_name = cc_name,
         srcs = [
             SRC_TYPE_NAME_1,
@@ -251,7 +267,7 @@ def _cc_interface_dep_test_impl(ctx):
 def _find_dep(package_root, name, deps):
     full_name = "@//" + package_root + ":" + name
     for lists in deps.to_list():
-        for dep in lists[0]:
+        for dep in lists.exports:
             if dep.startswith(full_name):
                 return True
 
@@ -273,7 +289,6 @@ def _test_cc_interface_dep():
     hidl_library(
         name = interface_name_dep,
         root = ROOT_2,
-        root_interface_file = ROOT_INTERFACE_FILE_LABEL_2,
         fq_name = cc_name_dep,
         srcs = [
             SRC_TYPE_NAME_2,
@@ -291,7 +306,6 @@ def _test_cc_interface_dep():
     hidl_library(
         name = interface_name_core,
         root = ROOT_2,
-        root_interface_file = ROOT_INTERFACE_FILE_LABEL_2,
         fq_name = cc_name_core,
         srcs = [
             SRC_TYPE_NAME_2,
@@ -310,7 +324,6 @@ def _test_cc_interface_dep():
         name = interface_name,
         deps = [interface_name_dep, interface_name_core],
         root = ROOT_1,
-        root_interface_file = ROOT_INTERFACE_FILE_LABEL_1,
         fq_name = cc_name,
         srcs = [
             SRC_TYPE_NAME_1,
@@ -334,6 +347,7 @@ def _test_cc_interface_dep():
     return test_name
 
 def cc_hidl_library_test_suite(name):
+    _setup_roots()
     native.test_suite(
         name = name,
         tests = [

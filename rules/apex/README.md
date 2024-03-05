@@ -37,7 +37,7 @@ The mixed build handler (`ProcessBazelQueryResponse`) is located [here](https://
 
 **Detailed features**
 
-*   Bazel build settings/flags in `//build/bazel/rules/apex/BUILD`, like `apexer_verbose` and `unsafe_disable_apex_allowed_deps_check`
+*   Bazel build settings/flags in `//build/bazel/rules/apex/BUILD`, like `unsafe_disable_apex_allowed_deps_check`
 *   ABI stability for native deps
     *   ABI stable stubs are marked as required, and not included within the APEX
     *   non-ABI stable transitive deps are copied into the APEX

@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load(":host_for_device.bzl", "java_host_for_device")
-load(":rules.bzl", "java_import")
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
-load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load(":host_for_device.bzl", "java_host_for_device")
+load(":import.bzl", "java_import")
 
 Platform = provider(
     "Platform of the leaf dependency in a linear dependency chain",

@@ -23,14 +23,13 @@ name, or the dependency tag name.
 Usage:
   ./bp2build-module-dep-infos.py -m <module type>
                                  --ignore-by-name <modules to ignore>
-
 """
 
 import argparse
 import collections
 import csv
-import dependency_analysis
 import sys
+import dependency_analysis
 
 _ModuleTypeInfo = collections.namedtuple(
     "_ModuleTypeInfo",
@@ -42,6 +41,7 @@ _ModuleTypeInfo = collections.namedtuple(
         "java_source_extensions",
     ],
 )
+
 
 def _get_java_source_extensions(module):
   out = set()
@@ -61,7 +61,7 @@ def module_type_info_from_json(
 ):
   """Builds a map of module name to _ModuleTypeInfo for each module of module_type.
 
-     Dependency edges pointing to modules in ignored_dep_names are not followed.
+  Dependency edges pointing to modules in ignored_dep_names are not followed.
   """
 
   modules_of_type = set()
@@ -83,20 +83,24 @@ def module_type_info_from_json(
         _ModuleTypeInfo(
             java_source_extensions=set(),
             type_to_properties=collections.defaultdict(set),
-        ))
+        ),
+    )
 
     java_source_extensions = _get_java_source_extensions(module)
 
     if module["Type"]:
       info.type_to_properties[module["Type"]].update(
-          dependency_analysis.get_property_names(module))
+          dependency_analysis.get_property_names(module)
+      )
 
     for dep_name in deps:
       for dep_type, dep_type_properties in type_infos[
-          dep_name].type_to_properties.items():
+          dep_name
+      ].type_to_properties.items():
         info.type_to_properties[dep_type].update(dep_type_properties)
         java_source_extensions.update(
-            type_infos[dep_name].java_source_extensions)
+            type_infos[dep_name].java_source_extensions
+        )
 
     info.java_source_extensions.update(java_source_extensions)
     # for a module, collect all properties and java source extensions specified by
@@ -104,7 +108,12 @@ def module_type_info_from_json(
     type_infos[module_name] = info
 
   dependency_analysis.visit_json_module_graph_post_order(
-      module_graph, ignored_dep_names, ignore_java_auto_deps, filter_by_type, update_infos)
+      module_graph,
+      ignored_dep_names,
+      ignore_java_auto_deps,
+      filter_by_type,
+      update_infos,
+  )
 
   return {
       name: info for name, info in type_infos.items() if name in modules_of_type
@@ -121,12 +130,22 @@ def _write_output(file_handle, type_infos):
   for module, module_type_info in type_infos.items():
     writer.writerow([
         module,
-        ("[\"%s\"]" % '"\n"'.join([
-            "%s: %s" % (mtype, ",".join(properties)) for mtype, properties in
-            module_type_info.type_to_properties.items()
-        ]) if len(module_type_info.type_to_properties) else "[]"),
-        ("[\"%s\"]" % '", "'.join(module_type_info.java_source_extensions)
-         if len(module_type_info.java_source_extensions) else "[]"),
+        (
+            '["%s"]'
+            % '"\n"'.join(
+                [
+                    "%s: %s" % (mtype, ",".join(properties))
+                    for mtype, properties in module_type_info.type_to_properties.items()
+                ]
+            )
+            if len(module_type_info.type_to_properties)
+            else "[]"
+        ),
+        (
+            '["%s"]' % '", "'.join(module_type_info.java_source_extensions)
+            if len(module_type_info.java_source_extensions)
+            else "[]"
+        ),
     ])
 
 

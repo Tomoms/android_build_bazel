@@ -31,13 +31,15 @@ def make_variation(mutator, variation):
   }
 
 
-def make_module(name,
-                typ,
-                deps=[],
-                blueprint='',
-                variations=None,
-                created_by='',
-                json_props=[]):
+def make_module(
+    name,
+    typ,
+    deps=[],
+    blueprint='',
+    variations=None,
+    created_by='',
+    json_props=[],
+):
   return {
       'Name': name,
       'Type': typ,

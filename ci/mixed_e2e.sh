@@ -23,3 +23,4 @@ set -o pipefail
 TOP="$(readlink -f "$(dirname "$0")"/../../..)"
 "$TOP/build/bazel/ci/determinism_test.sh"
 "$TOP/build/bazel/ci/mixed_mode_toggle.sh"
+"$TOP/build/bazel/ci/ensure_allowlist_integrity.sh"

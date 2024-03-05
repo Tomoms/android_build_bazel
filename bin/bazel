@@ -50,6 +50,7 @@ case $(uname -s) in
         ;;
     Linux)
         ANDROID_BAZEL_PATH="${TOP}/prebuilts/bazel/linux-x86_64/bazel"
+        ANDROID_BAZELISK_PATH="${TOP}/prebuilts/bazel/linux-x86_64/dev_tools/bazelisk/bazelisk"
         ANDROID_BAZELRC_NAME="linux.bazelrc"
         ANDROID_BAZEL_JDK_PATH="${TOP}/prebuilts/jdk/jdk11/linux-x86"
         RESTRICTED_PATH="${TOP}/prebuilts/build-tools/path/linux-x86:${ABSOLUTE_OUT_DIR}/.path"
@@ -69,7 +70,6 @@ function verify_soong_outputs_exist() {
 
     local bazel_configs=(
         "bp2build"
-        "api_bp2build"
         "queryview"
     )
     local valid_bazel_config=0
@@ -108,23 +108,15 @@ build --action_env=PATH=${RESTRICTED_PATH}
 common:queryview --noannounce_rc
 build:queryview --package_path=${ABSOLUTE_OUT_DIR}/soong/queryview
 fetch:queryview --package_path=${ABSOLUTE_OUT_DIR}/soong/queryview
-modquery:queryview --package_path=${ABSOLUTE_OUT_DIR}/soong/queryview
+mod:queryview --package_path=${ABSOLUTE_OUT_DIR}/soong/queryview
 query:queryview --package_path=${ABSOLUTE_OUT_DIR}/soong/queryview
 sync:queryview --package_path=${ABSOLUTE_OUT_DIR}/soong/queryview
-
-# Run bazel build from the workspace, without cd'ing into \$OUT_DIR/soong/api_bp2build
-common:api_bp2build --noannounce_rc
-build:api_bp2build --package_path=${ABSOLUTE_OUT_DIR}/soong/api_bp2build
-fetch:api_bp2build --package_path=${ABSOLUTE_OUT_DIR}/soong/api_bp2build
-modquery:api_bp2build --package_path=${ABSOLUTE_OUT_DIR}/soong/api_bp2build
-query:api_bp2build --package_path=${ABSOLUTE_OUT_DIR}/soong/api_bp2build
-sync:api_bp2build --package_path=${ABSOLUTE_OUT_DIR}/soong/api_bp2build
 
 # Run bazel build from the workspace, without cd'ing into \$OUT_DIR/soong/workspace
 common:bp2build --noannounce_rc
 build:bp2build --package_path=${ABSOLUTE_OUT_DIR}/soong/workspace
 fetch:bp2build --package_path=${ABSOLUTE_OUT_DIR}/soong/workspace
-modquery:bp2build --package_path=${ABSOLUTE_OUT_DIR}/soong/workspace
+mod:bp2build --package_path=${ABSOLUTE_OUT_DIR}/soong/workspace
 query:bp2build --package_path=${ABSOLUTE_OUT_DIR}/soong/workspace
 sync:bp2build --package_path=${ABSOLUTE_OUT_DIR}/soong/workspace
 
@@ -162,12 +154,20 @@ if [ -d "${ANDROID_BAZELRC_PATH}" ]; then
     ANDROID_BAZELRC_PATH="${ANDROID_BAZELRC_PATH}/${ANDROID_BAZELRC_NAME}"
 fi
 
+ADDITIONAL_FLAGS=()
 
-if [ -n "$ANDROID_BAZEL_PATH" -a -f "$ANDROID_BAZEL_PATH" ]; then
-    export ANDROID_BAZEL_PATH
+if [[ -z ${USE_BAZEL_VERSION+x} ]]; then
+  if [ -n "$ANDROID_BAZEL_PATH" -a -f "$ANDROID_BAZEL_PATH" ]; then
+      export ANDROID_BAZEL_PATH
+  else
+      >&2 echo "Couldn't locate Bazel binary"
+      exit 1
+  fi
 else
-    >&2 echo "Couldn't locate Bazel binary"
-    exit 1
+  echo -e "\033[1m\033[33mUSING BAZELISK:\033[0m Using Bazelisk because of env var: USE_BAZEL_VERSION=${USE_BAZEL_VERSION}" >&2
+  ANDROID_BAZEL_PATH=$ANDROID_BAZELISK_PATH
+  export ANDROID_BAZEL_PATH
+  # TODO(b/283971340): Pass BAZELISK_NOJDK=1 when this works with bazelisk.
 fi
 
 if [ "$ANDROID_BAZELRC_PATH" == "/dev/null" ] || [ -n "$ANDROID_BAZELRC_PATH" -a -f "$ANDROID_BAZELRC_PATH" ]; then
@@ -195,7 +195,6 @@ echo $ANDROID_BAZELRC_PATH >> "${MIXED_BUILDS_DOTD}"
 echo $ANDROID_BAZEL_JDK_PATH >> "${MIXED_BUILDS_DOTD}"
 
 
-ADDITIONAL_FLAGS=()
 if  is_standalone_bazel; then
     # STANDALONE_BAZEL is set.
     >&2 echo "WARNING: Using Bazel in standalone mode. This mode is not integrated with Soong and Make, and is not supported"
@@ -227,8 +226,15 @@ else
     fi
 fi
 
+# Change the PATH variable for the bazel invocation to include RESTRICTED_PATH.
+# This only affects the workspace_status_marker script environment and
+# the bazel run environment, and works around a bug for Bazelisk where Bazelisk
+# behaves differently if no PATH is present.
+BAZEL_PATH=$PATH:${RESTRICTED_PATH}
+
 # TODO(b/240354506): Re-enable hsperfdata file creation without causing SIGBUS errors
-JAVA_HOME="${ANDROID_BAZEL_JDK_PATH}" "${ANDROID_BAZEL_PATH}" \
+PATH="${BAZEL_PATH}" JAVA_HOME="${ANDROID_BAZEL_JDK_PATH}" \
+  "${ANDROID_BAZEL_PATH}" \
   --server_javabase="${ANDROID_BAZEL_JDK_PATH}" \
   --output_user_root="${BAZEL_METADATA_OUT}/output_user_root" \
   --host_jvm_args=-Djava.io.tmpdir="${BAZEL_METADATA_OUT}/javatmp" \

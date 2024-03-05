@@ -17,10 +17,7 @@ load(":prebuilt_file.bzl", "PrebuiltFileInfo")
 def _prebuilt_xml_impl(ctx):
     schema = ctx.file.schema
 
-    if len(ctx.files.src) != 1:
-        fail("src for %s is expected to be singular, but is of len %s\n", ctx.label.name, len(ctx.files.src))
-
-    src = ctx.files.src[0]
+    src = ctx.file.src
 
     args = ctx.actions.args()
     inputs = [src]
@@ -80,9 +77,7 @@ prebuilt_xml = rule(
     attrs = {
         "src": attr.label(
             mandatory = True,
-            allow_files = True,
-            # TODO(b/217908237): reenable allow_single_file
-            # allow_single_file = True,
+            allow_single_file = True,
         ),
         "schema": attr.label(
             allow_single_file = [".dtd", ".xsd"],

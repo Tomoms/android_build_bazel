@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+
 def get_dep_targets(attrs, *, predicate = lambda _: True):
     """get_dep_targets returns all targets listed in the current rule's attributes
 
@@ -51,3 +53,11 @@ def strip_bp2build_label_suffix(name):
     for suffix in _BP2BUILD_LABEL_SUFFIXES:
         name = name.removesuffix(suffix)
     return name
+
+def _repeatable_string_flag_impl(ctx):
+    return [BuildSettingInfo(value = [v for v in ctx.build_setting_value])]
+
+repeatable_string_flag = rule(
+    implementation = _repeatable_string_flag_impl,
+    build_setting = config.string(flag = True, allow_multiple = True),
+)

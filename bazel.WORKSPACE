@@ -5,30 +5,6 @@ load("//build/bazel/rules:soong_injection.bzl", "soong_injection_repository")
 
 soong_injection_repository(name = "soong_injection")
 
-# ! WARNING ! WARNING ! WARNING !
-# make_injection is a repository rule to allow Bazel builds to depend on
-# Soong-built prebuilts for experimental purposes. It is fragile, slow, and
-# works for very limited use cases. Do not add a dependency that will cause
-# make_injection to run for any prod builds or tests.
-#
-# If you need to add something in this list, please contact the Roboleaf
-# team and ask jingwen@ for a review.
-load("//build/bazel/rules:make_injection.bzl", "make_injection_repository")
-
-make_injection_repository(
-    name = "make_injection",
-    binaries = [
-        "build_image",
-        "mkuserimg_mke2fs",
-    ],
-    target_module_files = {},
-    watch_android_bp_files = [
-        "//:build/make/tools/releasetools/Android.bp",  # for build_image
-        "//:system/extras/ext4_utils/Android.bp",  # for mkuserimg_mke2fs
-    ],
-)
-# ! WARNING ! WARNING ! WARNING !
-
 load("//build/bazel/rules:env.bzl", "env_repository")
 
 env_repository(
@@ -62,6 +38,16 @@ local_repository(
     path = "external/bazelbuild-rules_license",
 )
 
+local_repository(
+    name = "rules_python",
+    path = "external/bazelbuild-rules_python",
+)
+
+local_repository(
+    name = "rules_cc",
+    path = "external/bazelbuild-rules_cc",
+)
+
 register_toolchains(
     "//prebuilts/build-tools:py_toolchain",
 
@@ -89,7 +75,7 @@ bind(
 # for Android app building, whereas the d8.jar in prebuilts/sdk/tools doesn't.
 bind(
     name = "android/d8_jar_import",
-    actual = "//prebuilts/bazel/common/r8:r8_jar_import",
+    actual = "//prebuilts/r8:r8lib-prebuilt",
 )
 
 # TODO(b/201242197): Avoid downloading remote_coverage_tools (on CI) by creating
@@ -121,17 +107,35 @@ local_repository(
     path = "prebuilts/bazel/linux-x86_64/remote_java_tools_linux",
 )
 
+# TODO(b/253667328): the below 3 repositories are all pointed to shim
+# repositories with targets that will cause failures if they are
+# actually depended on. Eventually we should properly vendor these
+# repositories.
+local_repository(
+    name = "remote_java_tools_darwin_x86_64",
+    path = "prebuilts/bazel/darwin-x86_64/remote_java_tools_darwin",
+)
+
+local_repository(
+    name = "remote_java_tools_darwin_arm64",
+    path = "prebuilts/bazel/darwin-x86_64/remote_java_tools_darwin",
+)
+
+local_repository(
+    name = "remote_java_tools_windows",
+    path = "prebuilts/bazel/darwin-x86_64/remote_java_tools_darwin",
+)
+
 # The following repository contains android_tools prebuilts.
 local_repository(
     name = "android_tools",
     path = "prebuilts/bazel/common/android_tools",
 )
 
-# The rules_java repository is stubbed and points to the native Java rules until
-# it can be properly vendored.
+# The vendored rules_java repository.
 local_repository(
     name = "rules_java",
-    path = "build/bazel_common_rules/rules/java/rules_java",
+    path = "external/bazelbuild-rules_java",
 )
 
 register_toolchains(
@@ -159,8 +163,90 @@ new_local_repository(
     path = "external/kotlinc",
 )
 
-register_toolchains("@rules_kotlin//toolchains/kotlin_jvm:kt_jvm_toolchain")
+register_toolchains("//build/bazel/rules/kotlin:kt_jvm_toolchain_linux")
 
-load("//prebuilts/clang/host/linux-x86:cc_toolchain_config.bzl", "cc_register_toolchains")
+load("//build/bazel/toolchains/clang/host/linux-x86:cc_toolchain_config.bzl", "cc_register_toolchains")
 
 cc_register_toolchains()
+
+local_repository(
+    name = "io_bazel_rules_go",
+    path = "external/bazelbuild-rules_go",
+)
+
+load(
+    "@io_bazel_rules_go//go:deps.bzl",
+    "go_register_toolchains",
+    "go_rules_dependencies",
+    "go_wrap_sdk",
+)
+
+go_wrap_sdk(
+    name = "go_sdk",
+    # Add coveragedesign to experiments. This is a temporary hack due to two separate issues combinining together
+    # 1. android:
+    # Starting with go 1.20, the standard go sdk does not ship with .a files for the standard libraries
+    # However, this breaks the go rules in build/blueprint. As a temporary workaround, we distribute prebuilts of the standard libaries
+    # in prebuilts/go using GODEBUG='installgoroot=all' in the prebuilt update script
+    #
+    # 2. rules_go:
+    # coverage is not supported in rules_go, and therefore it adds nocoveragedesign to GOEXPERIMENT. This is not an issue for non Android cases
+    # since the go SDK used in those cases does not contain prebuilts of standard libraries. The stdlib is built from scratch with `nocoverageredesign`.
+    #
+    # Without this, we run into isues during compilation
+    # ```
+    # GoCompilePkg build/blueprint/blueprint-deptools.a failed
+    # build/blueprint/deptools/depfile.go:18:2: could not import fmt (object is [go object linux amd64 go1.20.2 GOAMD64=v1 X:unified,regabiwrappers,regabiargs,coverageredesign
+    #                                                                                                                                                          ^^^^^^^^^^^^^^^^
+    # ] expected [go object linux amd64 go1.20.2 GOAMD64=v1 X:unified,regabiwrappers,regabiargs
+    # ```
+    # TODO - b/288456805: Remove this hardcoded experiment value
+    experiments = ["coverageredesign"],
+    # The expected key format is <goos>_<goarch>
+    # The value is any file in the GOROOT for that platform
+    root_files = {
+        "linux_amd64": "@//:prebuilts/go/linux-x86/README.md",
+        "darwin_amd64": "@//prebuilts/go/darwin-x86/README.md",
+    },
+)
+
+go_rules_dependencies()
+
+go_register_toolchains(experiments = [])
+
+local_repository(
+    name = "rules_proto",
+    path = "build/bazel/rules/proto",
+)
+
+local_repository(
+    name = "rules_rust",
+    path = "external/bazelbuild-rules_rust",
+)
+
+new_local_repository(
+    name = "rules_rust_tinyjson",
+    build_file = "@rules_rust//util/process_wrapper:BUILD.tinyjson.bazel",
+    path = "external/rust/crates/tinyjson",
+)
+
+local_repository(
+    name = "rules_testing",
+    path = "external/bazelbuild-rules_testing",
+)
+
+register_toolchains(
+    # The base toolchains need to be registered before <os_arch>
+    # to ensure it is preferably resolved when it's enabled by
+    # base_toolchain_enabled config_setting
+    "//build/bazel/toolchains/rust/bootstrap:rust_toolchain_android_arm64_base",
+    "//build/bazel/toolchains/rust/bootstrap:rust_toolchain_android_arm_base",
+    "//build/bazel/toolchains/rust/bootstrap:rust_toolchain_android_x86_64_base",
+    "//build/bazel/toolchains/rust/bootstrap:rust_toolchain_android_x86_base",
+    "//build/bazel/toolchains/rust:rust_toolchain_android_arm64",
+    "//build/bazel/toolchains/rust:rust_toolchain_android_arm",
+    "//build/bazel/toolchains/rust:rust_toolchain_android_x86_64",
+    "//build/bazel/toolchains/rust:rust_toolchain_android_x86",
+    "build/bazel/toolchains/rust:rust_toolchain_x86_64_unknown-linux-gnu",
+    "build/bazel/toolchains/rust:proto-toolchain",
+)

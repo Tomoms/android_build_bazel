@@ -29,5 +29,6 @@ python_library_host {
     srcs: ["test.proto"],
     proto: {
         canonical_path_from_root: false,
+        local_include_dirs: ["imports"],
     },
 }

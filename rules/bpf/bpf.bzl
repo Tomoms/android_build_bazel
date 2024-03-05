@@ -27,7 +27,7 @@ def _get_clang_cmd_output(ctx):
         copts.append("-g")
 
     includes = [
-        "frameworks/libs/net/common/native/bpf_headers/include/bpf",
+        "packages/modules/Connectivity/staticlibs/native/bpf_headers/include/bpf",
         # TODO(b/149785767): only give access to specific file with AID_* constants
         "system/core/libcutils/include",
         "external/musl/src/env",

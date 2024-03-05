@@ -21,7 +21,7 @@ load(
     "parse_sdk_version",
     "system_dynamic_deps_defaults",
 )
-load(":lto_transitions.bzl", "lto_deps_transition")
+load(":composed_transitions.bzl", "drop_sanitizer_transition")
 load(":stl.bzl", "stl_info_from_attr")
 
 # "cc_object" module copts, taken from build/soong/cc/object.go
@@ -54,6 +54,47 @@ def split_srcs_hdrs(files):
         else:
             non_headers_c.append(f)
     return non_headers_c, non_headers_as, headers
+
+def _objcopy_noaddrsig(ctx, noaddrsig_output, linking_output, cc_toolchain):
+    output_file = ctx.actions.declare_file(noaddrsig_output)
+
+    feature_configuration = cc_common.configure_features(
+        ctx = ctx,
+        cc_toolchain = cc_toolchain,
+        requested_features = ctx.features,
+        unsupported_features = ctx.disabled_features,
+    )
+
+    objcopy_path = cc_common.get_tool_for_action(
+        feature_configuration = feature_configuration,
+        action_name = "objcopy",
+    )
+    command_line = cc_common.get_memory_inefficient_command_line(
+        feature_configuration = feature_configuration,
+        action_name = "objcopy",
+        variables = cc_common.empty_variables(),
+    )
+
+    args = ctx.actions.args()
+    args.add_all(command_line)
+    args.add("--remove-section=.llvm_addrsig")
+    args.add(linking_output.executable)
+    args.add(output_file)
+
+    ctx.actions.run(
+        executable = objcopy_path,
+        arguments = [args],
+        inputs = depset(
+            direct = [linking_output.executable],
+            transitive = [
+                cc_toolchain.all_files,
+            ],
+        ),
+        outputs = [output_file],
+        mnemonic = "CppObjcopyNoAddrsig",
+    )
+
+    return output_file
 
 def _cc_object_impl(ctx):
     cc_toolchain = ctx.toolchains["//prebuilts/clang/host/linux-x86:nocrt_toolchain"].cc
@@ -160,7 +201,7 @@ def _cc_object_impl(ctx):
     # partially link if there are multiple object files
     if len(objects_to_link.objects) + len(objects_to_link.pic_objects) > 1:
         linking_output = cc_common.link(
-            name = ctx.label.name + ".o",
+            name = ctx.label.name + ".addrsig.o",
             actions = ctx.actions,
             feature_configuration = feature_configuration,
             cc_toolchain = cc_toolchain,
@@ -168,7 +209,10 @@ def _cc_object_impl(ctx):
             compilation_outputs = objects_to_link,
             additional_inputs = additional_inputs,
         )
-        files = depset([linking_output.executable])
+
+        noaddrsig_output = _objcopy_noaddrsig(ctx, ctx.label.name + ".o", linking_output, cc_toolchain)
+
+        files = depset([noaddrsig_output])
     else:
         files = depset(objects_to_link.objects + objects_to_link.pic_objects)
 
@@ -180,6 +224,7 @@ def _cc_object_impl(ctx):
 
 _cc_object = rule(
     implementation = _cc_object_impl,
+    cfg = drop_sanitizer_transition,
     attrs = {
         "srcs": attr.label_list(allow_files = constants.all_dot_exts),
         "srcs_as": attr.label_list(allow_files = constants.all_dot_exts),
@@ -191,15 +236,18 @@ _cc_object = rule(
         "linkopts": attr.string_list(),
         "objs": attr.label_list(
             providers = [CcInfo, CcObjectInfo],
-            cfg = lto_deps_transition,
         ),
         "includes_deps": attr.label_list(providers = [CcInfo]),
         "linker_script": attr.label(allow_single_file = True),
         "sdk_version": attr.string(),
         "min_sdk_version": attr.string(),
         "crt": attr.bool(default = False),
+        "package_name": attr.string(
+            mandatory = True,
+            doc = "Just the path to the target package. Used by transitions.",
+        ),
         "_android_product_variables": attr.label(
-            default = Label("//build/bazel/product_config:product_vars"),
+            default = Label("//build/bazel/product_config:product_variables_for_attributes"),
             providers = [platform_common.TemplateVariableInfo],
         ),
         "_apex_min_sdk_version": attr.label(
@@ -251,5 +299,6 @@ def cc_object(
         includes_deps = stl_info.static_deps + stl_info.shared_deps + system_dynamic_deps + deps,
         sdk_version = sdk_version,
         min_sdk_version = min_sdk_version,
+        package_name = native.package_name(),
         **kwargs
     )

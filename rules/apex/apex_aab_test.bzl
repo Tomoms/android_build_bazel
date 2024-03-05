@@ -98,7 +98,7 @@ def _test_apex_aab_apex_files_output_group():
             for basename in [
                 apex_name + ".apex",
                 apex_name + "-base.zip",
-                "java_apis_usedby_apex/" + apex_name + "_using.xml",
+                "java_apis_used_by_apex/" + apex_name + "_using.xml",
                 "ndk_apis_usedby_apex/" + apex_name + "_using.txt",
                 "ndk_apis_backedby_apex/" + apex_name + "_backing.txt",
             ]

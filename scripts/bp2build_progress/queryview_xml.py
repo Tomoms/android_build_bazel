@@ -18,32 +18,28 @@
 import xml.etree.ElementTree as ElementTree
 
 
-def make_module(full_name,
-                name,
-                kind,
-                variant='',
-                dep_names=[],
-                soong_module_type=None,
-                srcs=None):
+def make_module(
+    full_name,
+    name,
+    kind,
+    variant='',
+    dep_names=[],
+    soong_module_type=None,
+    srcs=None,
+):
   rule = ElementTree.Element('rule', attrib={'class': kind, 'name': full_name})
   ElementTree.SubElement(
-      rule, 'string', attrib={
-          'name': 'soong_module_name',
-          'value': name
-      })
+      rule, 'string', attrib={'name': 'soong_module_name', 'value': name}
+  )
   ElementTree.SubElement(
-      rule, 'string', attrib={
-          'name': 'soong_module_variant',
-          'value': variant
-      })
+      rule, 'string', attrib={'name': 'soong_module_variant', 'value': variant}
+  )
   if soong_module_type:
     ElementTree.SubElement(
         rule,
         'string',
-        attrib={
-            'name': 'soong_module_type',
-            'value': soong_module_type
-        })
+        attrib={'name': 'soong_module_type', 'value': soong_module_type},
+    )
   for dep in dep_names:
     ElementTree.SubElement(rule, 'rule-input', attrib={'name': dep})
 

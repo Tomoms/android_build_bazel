@@ -87,7 +87,7 @@ def _is_config_enabled(config):
         return False
 
     for key in config:
-        if key not in ["enabled", "min_sdk_version", "tags"]:
+        if key not in ["enabled", "min_sdk_version", "tags", "additional_dynamic_deps"]:
             fail("unknown property in aidl configuration: " + str(key))
 
     return config.get("enabled", False) == True
@@ -95,6 +95,7 @@ def _is_config_enabled(config):
 def aidl_interface(
         name,
         deps = [],
+        hdrs = [],
         strip_import_prefix = "",
         srcs = None,
         flags = None,
@@ -119,12 +120,13 @@ def aidl_interface(
     Arguments:
         name:                   string, base name of generated targets: <module-name>-V<version number>-<language-type>
         deps:                   List[AidlGenInfo], a list of other aidl_libraries that all versions of this interface depend on
+        hdrs:                   List[AidlGenInfo], a list of other aidl_libraries that all versions of this interface depend on but will not link against for C++
         strip_import_prefix:    str, a local directory to pass to the AIDL compiler to satisfy imports
         srcs:                   List[file], a list of files to include in the development (unversioned) version of the aidl_interface
         flags:                  List[string], a list of flags to pass to the AIDL compiler
         java_config:            Dict{"enabled": bool}, config for java backend
-        cpp_config:             Dict{"enabled": bool, "min_sdk_version": string}, config for cpp backend
-        ndk_config:             Dict{"enabled": bool, "min_sdk_version": string}, config for ndk backend
+        cpp_config:             Dict{"enabled": bool, "min_sdk_version": string, "additional_dynamic_deps": List[Label]}, config for cpp backend
+        ndk_config:             Dict{"enabled": bool, "min_sdk_version": string, "additional_dynamic_deps": List[Label]}, config for ndk backend
         stability:              string, stability promise of the interface. Currently, only supports "vintf"
         backends:               List[string], a list of the languages to generate bindings for
     """
@@ -142,8 +144,6 @@ def aidl_interface(
         fail("cannot have versions for unstable interface")
 
     aidl_flags = ["--structured"]
-    if flags != None:
-        aidl_flags.extend(flags)
 
     enabled_backend_configs = {}
     if _is_config_enabled(java_config):
@@ -177,12 +177,18 @@ def aidl_interface(
 
         for version_with_info in versions_with_info:
             deps_for_version = version_with_info.get("deps", [])
+            version = version_with_info.get("version")
+            flags_for_version = aidl_flags
+
+            if version == next_version and frozen == False and flags != None:
+                flags_for_version.extend(flags)
 
             create_aidl_binding_for_backends(
                 name = name,
                 version = version_with_info["version"],
                 deps = deps_for_version,
-                aidl_flags = aidl_flags,
+                hdrs = hdrs,
+                aidl_flags = flags_for_version,
                 backend_configs = enabled_backend_configs,
                 tags = tags,
                 **kwargs
@@ -207,6 +213,7 @@ def aidl_interface(
             srcs = srcs,
             strip_import_prefix = strip_import_prefix,
             deps = deps,
+            hdrs = hdrs,
             aidl_flags = aidl_flags,
             backend_configs = enabled_backend_configs,
             tags = tags,
@@ -219,6 +226,7 @@ def create_aidl_binding_for_backends(
         srcs = None,
         strip_import_prefix = "",
         deps = None,
+        hdrs = None,
         aidl_flags = [],
         backend_configs = {},
         tags = [],
@@ -232,6 +240,7 @@ def create_aidl_binding_for_backends(
         srcs:                   List[Label] list of unversioned AIDL srcs
         strip_import_prefix     string, the prefix to strip the paths of the .aidl files in srcs
         deps:                   List[AidlGenInfo], a list of other aidl_libraries that the version depends on
+        hdrs:                   List[AidlGenInfo], a list of other aidl_libraries that the version depends on but will not link against for C++
                                 the label of the targets have format <aidl-interface>-V<version_number>
         aidl_flags:             List[string], a list of flags to pass to the AIDL compiler
         backends:               List[string], a list of the languages to generate bindings for
@@ -256,7 +265,7 @@ def create_aidl_binding_for_backends(
 
     aidl_library(
         name = aidl_library_name,
-        deps = deps,
+        deps = deps + hdrs,
         hash_file = hash_file,
         version = version,
         strip_import_prefix = strip_import_prefix,
@@ -274,12 +283,14 @@ def create_aidl_binding_for_backends(
             min_sdk_version = config["min_sdk_version"]
 
         if lang == JAVA:
+            #TODO(b/285574832) re-enable Java backend
+            continue
             java_aidl_library(
                 name = aidl_library_name + "-java",
                 deps = [":" + aidl_library_name],
                 tags = tags + config.get("tags", []),
                 # TODO(b/249276008): Pass min_sdk_version to java_aidl_library
-                **(kwargs | {"target_compatible_with": ["//build/bazel/platforms/os:android"]})
+                **(kwargs | {"target_compatible_with": ["//build/bazel_common_rules/platforms/os:android"]})
             )
         elif lang == CPP or lang == NDK:
             dynamic_deps = []
@@ -305,6 +316,9 @@ def create_aidl_binding_for_backends(
 
                 # https://source.corp.google.com/android/system/tools/aidl/build/aidl_interface_backends.go;l=120;rcl=18dd931bde35b502545b7a52987e2363042c151c
                 cppflags = ["-DBINDER_STABILITY_SUPPORT"]
+
+            if "additional_dynamic_deps" in config:
+                dynamic_deps += config["additional_dynamic_deps"]
 
             if hasattr(kwargs, "tidy_checks_as_errors"):
                 fail("tidy_checks_as_errors cannot be overriden for aidl_interface cc_libraries")

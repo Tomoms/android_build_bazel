@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load(":apex_info.bzl", "ApexInfo", "ApexMkInfo")
-load(":apex_test_helpers.bzl", "test_apex")
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("//build/bazel/rules:prebuilt_file.bzl", "prebuilt_file")
-load("//build/bazel/rules/cc:cc_binary.bzl", "cc_binary")
 load("//build/bazel/rules:sh_binary.bzl", "sh_binary")
+load("//build/bazel/rules/cc:cc_binary.bzl", "cc_binary")
 load("//build/bazel/rules/cc:cc_library_shared.bzl", "cc_library_shared")
+load(":apex_info.bzl", "ApexMkInfo")
+load(":apex_test_helpers.bzl", "test_apex")
 
 def _apex_files_info_test(ctx):
     env = analysistest.begin(ctx)
@@ -114,10 +114,10 @@ def _test_apex_files_info_complex():
     apex_files_info_test(
         name = test_name,
         target_under_test = name,
-        target_compatible_with = ["//build/bazel/platforms/os:android", "//build/bazel/platforms/arch:arm64"],
+        target_compatible_with = ["//build/bazel_common_rules/platforms/os:android", "//build/bazel_common_rules/platforms/arch:arm64"],
         expected_files_info = [json.encode(i) for i in [
             {
-                "built_file": "bazel-out/bin/build/bazel/rules/apex/apex_files_info_complex_bin_cc",
+                "built_file": "bazel-out/bin/build/bazel/rules/apex/bin/apex_files_info_complex_bin_cc/apex_files_info_complex_bin_cc",
                 "class": "nativeExecutable",
                 "install_dir": "bin",
                 "basename": "apex_files_info_complex_bin_cc",
@@ -145,7 +145,7 @@ def _test_apex_files_info_complex():
                 "arch": "arm64",
             },
             {
-                "built_file": "bazel-out/bin/build/bazel/rules/apex/apex_files_info_complex_lib2_cc.so",
+                "built_file": "bazel-out/bin/build/bazel/rules/apex/apex_files_info_complex_lib2_cc/apex_files_info_complex_lib2_cc.so",
                 "class": "nativeSharedLib",
                 "install_dir": "lib64",
                 "basename": "apex_files_info_complex_lib2_cc.so",
@@ -155,7 +155,7 @@ def _test_apex_files_info_complex():
                 "unstripped_built_file": "bazel-out/bin/build/bazel/rules/apex/libapex_files_info_complex_lib2_cc_unstripped.so",
             },
             {
-                "built_file": "bazel-out/bin/build/bazel/rules/apex/apex_files_info_complex_lib_cc.so",
+                "built_file": "bazel-out/bin/build/bazel/rules/apex/apex_files_info_complex_lib_cc/apex_files_info_complex_lib_cc.so",
                 "class": "nativeSharedLib",
                 "install_dir": "lib",
                 "basename": "apex_files_info_complex_lib_cc.so",
@@ -165,7 +165,7 @@ def _test_apex_files_info_complex():
                 "unstripped_built_file": "bazel-out/bin/build/bazel/rules/apex/libapex_files_info_complex_lib_cc_unstripped.so",
             },
             {
-                "built_file": "bazel-out/bin/external/libcxx/libc++.so",
+                "built_file": "bazel-out/bin/external/libcxx/libc++/libc++.so",
                 "class": "nativeSharedLib",
                 "install_dir": "lib",
                 "basename": "libc++.so",
@@ -175,7 +175,7 @@ def _test_apex_files_info_complex():
                 "unstripped_built_file": "bazel-out/bin/external/libcxx/liblibc++_unstripped.so",
             },
             {
-                "built_file": "bazel-out/bin/external/libcxx/libc++.so",
+                "built_file": "bazel-out/bin/external/libcxx/libc++/libc++.so",
                 "class": "nativeSharedLib",
                 "install_dir": "lib64",
                 "basename": "libc++.so",

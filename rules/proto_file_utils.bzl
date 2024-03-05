@@ -17,20 +17,19 @@ load("@bazel_skylib//lib:sets.bzl", "sets")
 
 def _generate_and_declare_output_files(
         ctx,
-        file_names,
+        proto_rel_paths,
         type_dictionary):
     ret = {}
     for typ in type_dictionary:
         ret[typ] = []
 
-    for name in file_names:
-        short_path = name.short_path
+    for proto_rel_path in proto_rel_paths:
         for typ, ext in type_dictionary.items():
             # prefix with label.name to prevent collisions between targets
             # if proto compliation becomes an aspect, can prefix with output
             # information instead to allow reuse, e.g. multiple cc `lite`
             # libraries containing the same proto file
-            out_name = paths.join(ctx.label.name, paths.replace_extension(short_path, ext))
+            out_name = paths.join(ctx.label.name, paths.replace_extension(proto_rel_path, ext))
             declared = ctx.actions.declare_file(out_name)
             ret[typ].append(declared)
 
@@ -43,7 +42,8 @@ def _generate_jar_proto_action(
         out_flags = [],
         plugin_executable = None,
         out_arg = None,
-        mnemonic = "ProtoGen"):
+        mnemonic = "ProtoGen",
+        transitive_proto_infos = []):
     jar_basename = ctx.label.name + "-proto_gen"
     jar_name = jar_basename + "-src.jar"
     jar_file = ctx.actions.declare_file(jar_name)
@@ -57,6 +57,7 @@ def _generate_jar_proto_action(
         out_arg = out_arg,
         mnemonic = mnemonic,
         output_file = jar_file,
+        transitive_proto_infos = transitive_proto_infos,
     )
 
     srcjar_name = jar_basename + ".srcjar"
@@ -77,7 +78,8 @@ def _generate_proto_action(
         plugin_executable = None,
         out_arg = None,
         mnemonic = "ProtoGen",
-        output_file = None):
+        output_file = None,
+        transitive_proto_infos = []):
     """ Utility function for creating proto_compiler action.
 
     Args:
@@ -98,6 +100,7 @@ def _generate_proto_action(
     # TODO(B/245629074): Don't build external/protobuf if it is provided in
     #  toolchain already.
     proto_srcs = []
+    proto_rel_srcs = []
     proto_source_root_list = sets.make()
     transitive_proto_srcs_list = []
     transitive_proto_path_list = sets.make()
@@ -105,11 +108,17 @@ def _generate_proto_action(
     for proto_info in proto_infos:
         sets.insert(proto_source_root_list, proto_info.proto_source_root)
         proto_srcs.extend(proto_info.direct_sources)
+        proto_rel_srcs.extend([paths.relativize(p.path, proto_info.proto_source_root) for p in proto_info.direct_sources])
         transitive_proto_srcs_list.append(proto_info.transitive_imports)
         for p in proto_info.transitive_proto_path.to_list():
             sets.insert(transitive_proto_path_list, p)
 
+    for transitive_proto_info in transitive_proto_infos:
+        sets.insert(transitive_proto_path_list, transitive_proto_info.proto_source_root)
+        transitive_proto_srcs_list.append(depset(transitive_proto_info.direct_sources))
+
     protoc_out_name = paths.join(ctx.bin_dir.path, ctx.label.package)
+
     if output_file:
         protoc_out_name = paths.join(protoc_out_name, output_file.basename)
         out_files = {
@@ -119,7 +128,7 @@ def _generate_proto_action(
         protoc_out_name = paths.join(protoc_out_name, ctx.label.name)
         out_files = _generate_and_declare_output_files(
             ctx,
-            proto_srcs,
+            proto_rel_srcs,
             type_dictionary,
         )
 
@@ -134,11 +143,10 @@ def _generate_proto_action(
 
     # the order matters so we add the source roots first
     args.add_all(["-I" + p for p in sets.to_list(proto_source_root_list)])
-
     args.add_all(["-I" + p for p in sets.to_list(transitive_proto_path_list)])
     args.add_all(["-I{0}={1}".format(f.short_path, f.path) for t in transitive_proto_srcs_list for f in t.to_list()])
 
-    args.add_all([f.short_path for f in proto_srcs])
+    args.add_all([f.path for f in proto_srcs])
 
     inputs = depset(
         direct = proto_srcs,

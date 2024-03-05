@@ -18,9 +18,8 @@ load(
     "//build/bazel/rules/android/android_binary_aosp_internal:rule.bzl",
     "android_binary_aosp_internal_macro",
 )
-load("android_app_certificate.bzl", "android_app_certificate_with_default_cert")
-load("android_app_keystore.bzl", "android_app_keystore")
-load("//build/bazel/rules/java:sdk_transition.bzl", "sdk_transition", "sdk_transition_attrs")
+load("//build/bazel/rules/java:sdk_transition.bzl", "sdk_transition_attrs")
+load(":debug_signing_key.bzl", "debug_signing_key")
 
 # TODO(b/277801336): document these attributes.
 def _android_binary_helper(**attrs):
@@ -42,7 +41,13 @@ def _android_binary_helper(**attrs):
         )
     )
 
+    # The following attributes are unknown the native android_binary rule and must be removed
+    # prior to instantiating it.
     attrs.pop("$enable_manifest_merging", None)
+    attrs["proguard_specs"] = []
+    attrs.pop("sdk_version")
+    if "updatable" in attrs:
+        attrs.pop("updatable")
 
     native.android_binary(
         application_resources = android_binary_aosp_internal_name,
@@ -54,9 +59,13 @@ def android_binary(
         certificate = None,
         certificate_name = None,
         sdk_version = None,
+        errorprone_force_enable = None,
+        javacopts = [],
         java_version = None,
+        optimize = True,
         tags = [],
         target_compatible_with = [],
+        testonly = False,
         visibility = None,
         **kwargs):
     """ android_binary macro wrapper that handles custom attrs needed in AOSP
@@ -73,38 +82,37 @@ def android_binary(
     Arguments:
         certificate: Bazel target
         certificate_name: string, name of private key file in default certificate directory
+        errorprone_force_enable: set this to true to always run Error Prone
+        on this target (overriding the value of environment variable
+        RUN_ERROR_PRONE). Error Prone can be force disabled for an individual
+        module by adding the "-XepDisableAllChecks" flag to javacopts
         **kwargs: map, additional args to pass to android_binary
+
     """
 
-    if certificate and certificate_name:
-        fail("Cannot use both certificate_name and certificate attributes together. Use only one of them.")
+    opts = javacopts
+    if errorprone_force_enable == None:
+        # TODO (b/227504307) temporarily disable errorprone until environment variable is handled
+        opts = opts + ["-XepDisableAllChecks"]
 
     debug_signing_keys = kwargs.pop("debug_signing_keys", [])
+    debug_signing_keys.extend(debug_signing_key(name, certificate, certificate_name))
 
-    if certificate or certificate_name:
-        if certificate_name:
-            app_cert_name = name + "_app_certificate"
-            android_app_certificate_with_default_cert(
-                name = app_cert_name,
-                cert_name = certificate_name,
-            )
-            certificate = ":" + app_cert_name
-
-        app_keystore_name = name + "_keystore"
-        android_app_keystore(
-            name = app_keystore_name,
-            certificate = certificate,
-        )
-
-        debug_signing_keys.append(app_keystore_name)
+    if optimize:
+        kwargs["proguard_specs"] = [
+            "//build/make/core:global_proguard_flags",
+        ] + kwargs.get("proguard_specs", [])
 
     bin_name = name + "_private"
     _android_binary_helper(
         name = bin_name,
         debug_signing_keys = debug_signing_keys,
+        javacopts = opts,
         target_compatible_with = target_compatible_with,
         tags = tags + ["manual"],
+        testonly = testonly,
         visibility = ["//visibility:private"],
+        sdk_version = sdk_version,
         **kwargs
     )
 
@@ -115,6 +123,7 @@ def android_binary(
         exports = bin_name,
         tags = tags,
         target_compatible_with = target_compatible_with,
+        testonly = testonly,
         visibility = visibility,
     )
 
@@ -126,7 +135,6 @@ def android_binary(
 def _android_binary_sdk_transition_impl(ctx):
     return struct(
         android = ctx.attr.exports[0].android,
-        JavaGenJarsProvider = ctx.attr.exports[0][JavaInfo].annotation_processing,
         providers = [
             ctx.attr.exports[0][AndroidIdlInfo],
             ctx.attr.exports[0][InstrumentedFilesInfo],

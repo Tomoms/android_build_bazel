@@ -177,7 +177,6 @@ def _sign_bundle(ctx, aapt2, avbtool, module_name, bundle_file, apex_info):
         ctx.executable._sign_apex,
         ctx.executable._openssl,
         ctx.executable._zip2zip,
-        ctx.executable._blkid,
         aapt2,
         avbtool.files_to_run.executable,
         python_interpreter,
@@ -210,7 +209,6 @@ def _sign_bundle(ctx, aapt2, avbtool, module_name, bundle_file, apex_info):
     args.add_all(["--aapt2_path", aapt2.path])
     args.add_all(["--bundletool_path", bundletool_jarfile.path])
     args.add_all(["--deapexer_path", ctx.executable._deapexer.path])
-    args.add_all(["--blkid_path", ctx.executable._blkid.path])
     args.add_all(["--debugfs_path", ctx.executable._debugfs.path])
     args.add_all(["--java_binary_path", paths.join(java_bin, "java")])
     args.add_all(["--apex_signer_path", ctx.executable._sign_apex])
@@ -230,6 +228,7 @@ def _sign_bundle(ctx, aapt2, avbtool, module_name, bundle_file, apex_info):
                     ctx.executable._deapexer.dirname,
                     avbtool.files_to_run.executable.dirname,
                     ctx.executable._openssl.dirname,
+                    ctx.executable._zip2zip.dirname,
                     java_bin,
                 ],
             ),
@@ -271,7 +270,7 @@ def _apex_aab_impl(ctx):
             apex_info.signed_output: arch_subdir,
             apex_info.symbols_used_by_apex: arch_subdir + "/ndk_apis_usedby_apex",
             apex_info.backing_libs: arch_subdir + "/ndk_apis_backedby_apex",
-            apex_info.java_symbols_used_by_apex: arch_subdir + "/java_apis_usedby_apex",
+            apex_info.java_symbols_used_by_apex: arch_subdir + "/java_apis_used_by_apex",
             # TODO(b/262267680): create licensetexts
             # TODO(b/262267551): create shareprojects
         }
@@ -342,11 +341,6 @@ _apex_aab = rule(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
             doc = "Allow transition.",
         ),
-        "_blkid": attr.label(
-            cfg = "exec",
-            executable = True,
-            default = "//external/e2fsprogs/misc:blkid",
-        ),
         "_bundletool": attr.label(
             cfg = "exec",
             executable = True,
@@ -386,7 +380,7 @@ _apex_aab = rule(
             allow_single_file = True,
             cfg = "exec",
             executable = True,
-            default = "//prebuilts/build-tools:linux-x86/bin/merge_zips",
+            default = "//build/soong/cmd/merge_zips",
         ),
         "_openssl": attr.label(
             allow_single_file = True,
@@ -420,7 +414,7 @@ _apex_aab = rule(
 
 def apex_aab(name, mainline_module, dev_sign_bundle = None, dev_keystore = None, target_compatible_with = [], **kwargs):
     target_compatible_with = select({
-        "//build/bazel/platforms/os:android": [],
+        "//build/bazel_common_rules/platforms/os:android": [],
         "//conditions:default": ["@platforms//:incompatible"],
     }) + target_compatible_with
 

@@ -23,19 +23,19 @@ This works because child targets inherit their parent's configuration.
 """
 
 _name_to_constraint = {
-    "_x86_constraint": "//build/bazel/platforms/arch:x86",
-    "_x86_64_constraint": "//build/bazel/platforms/arch:x86_64",
-    "_arm_constraint": "//build/bazel/platforms/arch:arm",
-    "_arm64_constraint": "//build/bazel/platforms/arch:arm64",
-    "_secondary_x86_constraint": "//build/bazel/platforms/arch:secondary_x86",
-    "_secondary_x86_64_constraint": "//build/bazel/platforms/arch:secondary_x86_64",
-    "_secondary_arm_constraint": "//build/bazel/platforms/arch:secondary_arm",
-    "_secondary_arm64_constraint": "//build/bazel/platforms/arch:secondary_arm64",
-    "_android_constraint": "//build/bazel/platforms/os:android",
-    "_linux_constraint": "//build/bazel/platforms/os:linux",
-    "_linux_musl_constraint": "//build/bazel/platforms/os:linux_musl",
-    "_linux_bionic_constraint": "//build/bazel/platforms/os:linux_bionic",
-    "_darwin_constraint": "//build/bazel/platforms/os:darwin",
+    "_x86_constraint": "//build/bazel_common_rules/platforms/arch:x86",
+    "_x86_64_constraint": "//build/bazel_common_rules/platforms/arch:x86_64",
+    "_arm_constraint": "//build/bazel_common_rules/platforms/arch:arm",
+    "_arm64_constraint": "//build/bazel_common_rules/platforms/arch:arm64",
+    "_secondary_x86_constraint": "//build/bazel_common_rules/platforms/arch:secondary_x86",
+    "_secondary_x86_64_constraint": "//build/bazel_common_rules/platforms/arch:secondary_x86_64",
+    "_secondary_arm_constraint": "//build/bazel_common_rules/platforms/arch:secondary_arm",
+    "_secondary_arm64_constraint": "//build/bazel_common_rules/platforms/arch:secondary_arm64",
+    "_android_constraint": "//build/bazel_common_rules/platforms/os:android",
+    "_linux_constraint": "//build/bazel_common_rules/platforms/os:linux",
+    "_linux_musl_constraint": "//build/bazel_common_rules/platforms/os:linux_musl",
+    "_linux_bionic_constraint": "//build/bazel_common_rules/platforms/os:linux_bionic",
+    "_darwin_constraint": "//build/bazel_common_rules/platforms/os:darwin",
 }
 
 _AndroidPlatformUtilsInfo = provider(

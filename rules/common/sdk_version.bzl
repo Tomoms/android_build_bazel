@@ -24,6 +24,7 @@ _KIND_SYSTEM_SERVER = "system_server"
 _KIND_MODULE = "module"
 _KIND_CORE = "core"
 _KIND_NONE = "none"
+_KIND_CORE_PLATFORM = "core_platform"
 _ALL_KINDS = [
     _KIND_PUBLIC,
     _KIND_SYSTEM,
@@ -32,6 +33,7 @@ _ALL_KINDS = [
     _KIND_MODULE,
     _KIND_CORE,
     _KIND_NONE,
+    # _KIND_CORE_PLATFORM, # TODO: Add when core_plaform is supported in b builds
 ]
 
 # Starlark implementation of SdkSpecFrom at https://cs.android.com/android/platform/build/soong/+/master:android/sdk_version.go;l=248-299;drc=69f4218c4feaeca953237cd9e76a9a8cc423d3e3.
@@ -56,7 +58,7 @@ def _sdk_spec_from(sdk_version):
     if sdk_version == "core_platform":
         fail("Only prebuilt SDK versions are available, sdk_version core_platform is not yet supported.")
     if sdk_version == "none":
-        return struct(kind = _KIND_NONE, api_level = api.NONE_API_LEVEL)
+        return struct(kind = _KIND_NONE, api_level = api.NONE_API_LEVEL, _api_level_string = "(no version)")
     if type(sdk_version) != type(""):
         fail("sdk_version must be a string")
     sep_index = sdk_version.rfind("_")
@@ -69,7 +71,10 @@ def _sdk_spec_from(sdk_version):
             sdk_version,
             ",".join(_ALL_KINDS),
         ))
-    return struct(kind = kind, api_level = api_level)
+    return struct(kind = kind, api_level = api_level, _api_level_string = api_level_string)
+
+def _api_level_string_with_fallback(api_level_string, sdk_version):
+    return api_level_string if api_level_string else _sdk_spec_from(sdk_version)._api_level_string
 
 sdk_version = struct(
     KIND_PUBLIC = _KIND_PUBLIC,
@@ -79,6 +84,8 @@ sdk_version = struct(
     KIND_MODULE = _KIND_MODULE,
     KIND_CORE = _KIND_CORE,
     KIND_NONE = _KIND_NONE,
+    KIND_CORE_PLATFORM = _KIND_CORE_PLATFORM,
     ALL_KINDS = _ALL_KINDS,
+    api_level_string_with_fallback = _api_level_string_with_fallback,
     sdk_spec_from = _sdk_spec_from,
 )

@@ -10,8 +10,8 @@
 #######
 
 # Set the test output directories.
-AOSP_ROOT="$(dirname $0)/../../.."
-OUT_DIR=$(realpath ${OUT_DIR:-${AOSP_ROOT}/out})
+SOURCE_ROOT="$(dirname $0)/../../.."
+OUT_DIR=$(realpath ${OUT_DIR:-${SOURCE_ROOT}/out})
 if [[ -z ${DIST_DIR+x} ]]; then
   DIST_DIR="${OUT_DIR}/dist"
   echo "DIST_DIR not set. Using ${OUT_DIR}/dist. This should only be used for manual developer testing."
@@ -33,15 +33,14 @@ source "$(dirname $0)/target_lists.sh"
 # Build and test targets for device target platform.
 ###############
 
-build_for_device BUILD_TARGETS TEST_TARGETS
+build_for_device BUILD_TARGETS TEST_TARGETS DEVICE_ONLY_TARGETS
 
 declare -a host_targets
 host_targets+=( "${BUILD_TARGETS[@]}" )
 host_targets+=( "${TEST_TARGETS[@]}" )
-host_targets+=( "${HOST_INCOMPATIBLE_TARGETS[@]}" )
 host_targets+=( "${HOST_ONLY_TEST_TARGETS[@]}" )
 
-build_for_host ${host_targets[@]}
+build_and_test_for_host ${host_targets[@]}
 
 #########################################################################
 # Check that rule wrappers have the same providers as the rules they wrap
@@ -88,7 +87,7 @@ BP2BUILD_PROGRESS_MODULES=(
 
 # Query for some module types of interest so that we don't have to hardcode the
 # lists
-"${AOSP_ROOT}/build/soong/soong_ui.bash" --make-mode BP2BUILD_VERBOSE=1 --skip-soong-tests queryview
+"${SOURCE_ROOT}/build/soong/soong_ui.bash" --make-mode BP2BUILD_VERBOSE=1 --skip-soong-tests queryview
 rm -f out/ninja_build
 
 # Only apexes/apps that specify updatable=1 are mainline modules, the other are
@@ -116,3 +115,4 @@ build/bazel/bin/bazel run ${FLAGS} --config=linux_x86_64 "${bp2build_progress_sc
   report ${report_args} \
   --proto-file=$( realpath "${bp2build_progress_output_dir}" )"/bp2build-progress.pb" \
   --out-file=$( realpath "${bp2build_progress_output_dir}" )"/progress_report.txt" \
+  --bp2build-metrics-location=$( realpath "${DIST_DIR}" )"/logs" \

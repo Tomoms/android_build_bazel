@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@soong_injection//allowlists:env.bzl", _CAPTURED_ENV_VARS = "env")
+load(":env_variables.bzl", _CAPTURED_ENV_VARS = "CAPTURED_ENV_VARS")
 
 _ALLOWED_SPECIAL_CHARACTERS = [
     "/",

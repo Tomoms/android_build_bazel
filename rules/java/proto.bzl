@@ -13,7 +13,7 @@
 # limitations under the License.
 
 load("//build/bazel/rules:proto_file_utils.bzl", "proto_file_utils")
-load(":rules.bzl", "java_library")
+load(":library.bzl", "java_library")
 
 def _java_proto_sources_gen_rule_impl(ctx):
     out_flags = []
@@ -39,6 +39,7 @@ def _java_proto_sources_gen_rule_impl(ctx):
         out_flags = out_flags,
         plugin_executable = plugin_executable,
         out_arg = out_arg,
+        transitive_proto_infos = [dep[ProtoInfo] for dep in ctx.attr.transitive_deps],
     )
     srcs.append(out_jar)
 
@@ -46,7 +47,7 @@ def _java_proto_sources_gen_rule_impl(ctx):
         DefaultInfo(files = depset(direct = srcs)),
     ]
 
-_java_proto_sources_gen = rule(
+java_proto_sources_gen = rule(
     implementation = _java_proto_sources_gen_rule_impl,
     attrs = {
         "deps": attr.label_list(
@@ -55,6 +56,13 @@ _java_proto_sources_gen = rule(
 proto_library or any other target exposing ProtoInfo provider with *.proto files
 """,
             mandatory = True,
+        ),
+        "transitive_deps": attr.label_list(
+            providers = [ProtoInfo],
+            doc = """
+proto_library that will be added to aprotoc -I when compiling the direct .proto sources.
+WARNING: This is an experimental attribute and is expected to be deprecated in the future.
+""",
         ),
         "_protoc": attr.label(
             default = Label("//external/protobuf:aprotoc"),
@@ -81,7 +89,8 @@ def _generate_java_proto_action(
         ctx,
         plugin_executable,
         out_arg,
-        out_flags):
+        out_flags,
+        transitive_proto_infos):
     return proto_file_utils.generate_jar_proto_action(
         proto_infos,
         protoc,
@@ -90,11 +99,13 @@ def _generate_java_proto_action(
         plugin_executable = plugin_executable,
         out_arg = out_arg,
         mnemonic = "JavaProtoGen",
+        transitive_proto_infos = transitive_proto_infos,
     )
 
 def _java_proto_library(
         name,
         deps = [],
+        transitive_deps = [],
         plugin = None,
         out_format = None,
         proto_dep = None,
@@ -102,24 +113,25 @@ def _java_proto_library(
         **kwargs):
     proto_sources_name = name + "_proto_gen"
 
-    _java_proto_sources_gen(
+    java_proto_sources_gen(
         name = proto_sources_name,
         deps = deps,
+        transitive_deps = transitive_deps,
         plugin = plugin,
         out_format = out_format,
         tags = ["manual"],
     )
 
-    if proto_dep:
-        deps = [proto_dep]
-    else:
-        deps = []
+    deps = kwargs.pop("additional_proto_deps", [])
+    if proto_dep and proto_dep not in deps:
+        deps.append(proto_dep)
 
     java_library(
         name = name,
         srcs = [proto_sources_name],
         deps = deps,
         sdk_version = sdk_version,
+        exports = [proto_dep],
         **kwargs
     )
 

@@ -18,9 +18,9 @@ syntax = "proto3";
 
 package bazel.example.proto;
 
+import "test_dep.proto";
+
 message ExampleMessage {
   string name = 1;
   string other_field = 2;
 }
-
-

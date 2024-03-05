@@ -149,6 +149,7 @@ def _apex_available_aspect_impl(target, ctx):
 apex_available_aspect = aspect(
     implementation = _apex_available_aspect_impl,
     provides = [ApexAvailableInfo],
+    apply_to_generating_rules = True,
     attr_aspects = ["*"],
     attrs = {
         "testonly": attr.bool(default = False),  # propagated from the apex

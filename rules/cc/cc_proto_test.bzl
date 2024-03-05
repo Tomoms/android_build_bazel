@@ -18,9 +18,9 @@ load("@bazel_skylib//lib:sets.bzl", "sets")
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load(":cc_proto.bzl", "PROTO_GEN_NAME_SUFFIX", "cc_proto_library")
 
-PROTO_GEN = "external/protobuf/aprotoc"
+PROTO_GEN = "external/protobuf/bin/aprotoc/aprotoc"
 VIRTUAL_IMPORT = "_virtual_imports"
-RUNFILES = "_middlemen/external_Sprotobuf_Saprotoc-runfiles"
+RUNFILES = "_middlemen/external_Sprotobuf_Sbin_Saprotoc_Saprotoc-runfiles"
 
 GEN_SUFFIX = [
     ".pb.h",
@@ -171,7 +171,6 @@ def _test_proto_code_gen():
 
 def _proto_strip_import_prefix_test_impl(ctx):
     env = analysistest.begin(ctx)
-    target_under_test = analysistest.target_under_test(env)
     actions = analysistest.target_actions(env)
     package_root = ctx.label.package
 
@@ -185,16 +184,6 @@ def _proto_strip_import_prefix_test_impl(ctx):
     stripped_file_input_full_path = paths.join(
         stripped_file_input_path,
         stripped_file_name,
-    )
-    unstripped_file_output_path = paths.join(
-        package_root,
-        target_under_test.label.name,
-        package_root,
-    )
-    stripped_file_output_path = paths.join(
-        unstripped_file_output_path,
-        VIRTUAL_IMPORT,
-        ctx.attr.stripped_proto_name,
     )
 
     asserts.true(
@@ -223,22 +212,7 @@ def _proto_strip_import_prefix_test_impl(ctx):
 
     asserts.set_equals(
         env,
-        expected = sets.make(
-            [
-                paths.join(
-                    unstripped_file_output_path,
-                    paths.replace_extension(ctx.attr.unstripped_file_name, ext),
-                )
-                for ext in GEN_SUFFIX
-            ] +
-            [
-                paths.join(
-                    stripped_file_output_path,
-                    paths.replace_extension(stripped_file_name, ext),
-                )
-                for ext in GEN_SUFFIX
-            ],
-        ),
+        expected = sets.make(ctx.attr.expected_outputs),
         actual = sets.make([
             file.short_path
             for file in action.outputs.to_list()
@@ -274,6 +248,7 @@ proto_strip_import_prefix_test = analysistest.make(
         "stripped_file_name": attr.string(),
         "unstripped_file_name": attr.string(),
         "strip_import_prefix": attr.string(),
+        "expected_outputs": attr.string_list(),
     },
 )
 
@@ -308,6 +283,17 @@ def _test_proto_strip_import_prefix():
         tags = ["manual"],
     )
 
+    expected_outputs = [
+        # unstripped, the default behavior
+        # bazel package is added to the path
+        "build/bazel/rules/cc/proto_strip_import_prefix_test_cc_proto_proto_gen/build/bazel/rules/cc/unstripped/unstripped.pb.cc",
+        "build/bazel/rules/cc/proto_strip_import_prefix_test_cc_proto_proto_gen/build/bazel/rules/cc/unstripped/unstripped.pb.h",
+        # stripped - src/stripped/stripped.proto --> stripped/stripped.pb.cc
+        # since strip_import_prefix is not nil, the bazel package is not added to the path
+        "build/bazel/rules/cc/proto_strip_import_prefix_test_cc_proto_proto_gen/stripped/stripped.pb.cc",
+        "build/bazel/rules/cc/proto_strip_import_prefix_test_cc_proto_proto_gen/stripped/stripped.pb.h",
+    ]
+
     proto_strip_import_prefix_test(
         name = test_name,
         target_under_test = cc_name + PROTO_GEN_NAME_SUFFIX,
@@ -315,6 +301,7 @@ def _test_proto_strip_import_prefix():
         stripped_file_name = stripped_file_name,
         unstripped_file_name = unstripped_file_name,
         strip_import_prefix = strip_import_prefix,
+        expected_outputs = expected_outputs,
     )
 
     return test_name

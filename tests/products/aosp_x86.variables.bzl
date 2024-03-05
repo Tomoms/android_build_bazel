@@ -73,7 +73,7 @@ variables = json.decode('''{
     "CFIIncludePaths": ["device/generic/goldfish/wifi/wpa_supplicant_8_lib","device/google/cuttlefish/guest/libs/wpa_supplicant_8_lib","external/tinyxml2","external/wpa_supplicant_8","frameworks/av/camera","frameworks/av/media","frameworks/av/services","frameworks/minikin","hardware/broadcom/wlan/bcmdhd/wpa_supplicant_8_lib","hardware/synaptics/wlan/synadhd/wpa_supplicant_8_lib","hardware/interfaces/nfc","hardware/qcom/wlan/legacy/qcwcn/wpa_supplicant_8_lib","hardware/qcom/wlan/wcn6740/qcwcn/wpa_supplicant_8_lib","hardware/interfaces/keymaster","hardware/interfaces/security","packages/modules/Bluetooth/system","system/chre","system/core/libnetutils","system/libziparchive","system/gatekeeper","system/keymaster","system/nfc","system/security"],
     "IntegerOverflowExcludePaths": [],
     "MemtagHeapExcludePaths": [],
-    "MemtagHeapAsyncIncludePaths": [],
+    "MemtagHeapAsyncIncludePaths": ["external/android-clat","external/iproute2","external/iptables","external/mtpd","external/ppp","hardware/st/nfc","hardware/st/secure_element","hardware/st/secure_element2","packages/modules/StatsD","system/bpf","system/netd/netutil_wrappers","system/netd/server"],
     "MemtagHeapSyncIncludePaths": [],
     "DisableScudo": false,
     "ClangTidy": false,
@@ -174,7 +174,6 @@ variables = json.decode('''{
     "ProductPublicSepolicyDirs": [],
     "ProductPrivateSepolicyDirs": [],
     "TargetFSConfigGen": [],
-    "MissingUsesLibraries": ["com.google.android.ble","com.google.android.media.effects","com.google.android.wearable"],
     "VendorVars": {
         "ANDROID": {
             "BOARD_USES_ODMIMAGE": "",
@@ -224,7 +223,7 @@ variables = json.decode('''{
     "BuildBrokenClangProperty": false,
     "BuildBrokenClangAsFlags": false,
     "BuildBrokenClangCFlags": false,
-    "BuildBrokenDepfile": false,
+    "GenruleSandboxing": false,
     "BuildBrokenEnforceSyspropOwner": false,
     "BuildBrokenTrebleSyspropNeverallow": false,
     "BuildBrokenUsesSoongPython2Modules": false,

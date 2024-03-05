@@ -4,6 +4,10 @@ load("@soong_injection//cc_toolchain:config_constants.bzl", "constants")
 sh_test(
     name = "verify_bionic_outputs",
     srcs = ["verify_bionic_outputs.sh"],
+    args = [
+        "$(location //prebuilts/clang/host/linux-x86:llvm-nm)",
+        "$(location //prebuilts/clang/host/linux-x86:llvm-readelf)",
+    ],
     data = [
         "//bionic/libc",
         "//bionic/libc:libc_bp2build_cc_library_static",
@@ -11,9 +15,9 @@ sh_test(
         "//bionic/libdl:libdl_android_bp2build_cc_library_static",
         "//bionic/linker:ld-android",
         "//bionic/linker:ld-android_bp2build_cc_library_static",
-        "//prebuilts/clang/host/linux-x86:test_tools",
+        "//prebuilts/clang/host/linux-x86:llvm-nm",
+        "//prebuilts/clang/host/linux-x86:llvm-readelf",
     ],
-    env = {"ClangVersion": constants.ClangVersion},
     deps = ["@bazel_tools//tools/bash/runfiles"],
 )
 
@@ -24,6 +28,5 @@ sh_test(
         "//bionic/libc",
         "//bionic/libc:libc_unstripped",
     ],
-    env = {"ClangVersion": constants.ClangVersion},
     deps = ["@bazel_tools//tools/bash/runfiles"],
 )

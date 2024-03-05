@@ -128,9 +128,7 @@ sh_test(
         ":aidl_library_V1_produced_by_default_query",
         ":aidl_library_V2_produced_by_default_query",
         ":aidl_library_latest_produced_by_default_query",
-        ":java_backend_V1_produced_by_default_query",
-        ":java_backend_V2_produced_by_default_query",
-        ":java_backend_latest_produced_by_default_query",
+        #TODO(b/85574832) re-enable Java-backends
     ],
     tags = [
         "manual",

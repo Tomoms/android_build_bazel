@@ -370,7 +370,7 @@ def _test_aidl_interface_generated_cc_library_has_correct_tidy_checks_as_errors(
         target_under_test = shared_target_under_test,
         mnemonics = ["ClangTidy"],
         expected_flags = [
-            "-warnings-as-errors=*,-clang-analyzer-deadcode.DeadStores,-clang-analyzer-cplusplus.NewDeleteLeaks,-clang-analyzer-optin.performance.Padding,-bugprone-assignment-in-if-condition,-bugprone-branch-clone,-bugprone-signed-char-misuse,-misc-const-correctness",
+            "-warnings-as-errors=*,-clang-analyzer-deadcode.DeadStores,-clang-analyzer-cplusplus.NewDeleteLeaks,-clang-analyzer-optin.performance.Padding,-bugprone-assignment-in-if-condition,-bugprone-branch-clone,-bugprone-signed-char-misuse,-misc-const-correctness,-bugprone-unsafe-functions,-cert-msc24-c,-cert-msc33-c,-modernize-type-traits,-readability-avoid-unconditional-preprocessor-if",
         ],
     )
     _action_flags_present_with_tidy_test(
@@ -378,7 +378,7 @@ def _test_aidl_interface_generated_cc_library_has_correct_tidy_checks_as_errors(
         target_under_test = static_target_under_test,
         mnemonics = ["ClangTidy"],
         expected_flags = [
-            "-warnings-as-errors=*,-clang-analyzer-deadcode.DeadStores,-clang-analyzer-cplusplus.NewDeleteLeaks,-clang-analyzer-optin.performance.Padding,-bugprone-assignment-in-if-condition,-bugprone-branch-clone,-bugprone-signed-char-misuse,-misc-const-correctness",
+            "-warnings-as-errors=*,-clang-analyzer-deadcode.DeadStores,-clang-analyzer-cplusplus.NewDeleteLeaks,-clang-analyzer-optin.performance.Padding,-bugprone-assignment-in-if-condition,-bugprone-branch-clone,-bugprone-signed-char-misuse,-misc-const-correctness,-bugprone-unsafe-functions,-cert-msc24-c,-cert-msc33-c,-modernize-type-traits,-readability-avoid-unconditional-preprocessor-if",
         ],
     )
     return [

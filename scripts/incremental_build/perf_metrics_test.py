@@ -20,48 +20,46 @@ from perf_metrics import _get_column_headers
 
 
 def to_row(concatenated_keys: str) -> dict:
-  return {c: None for c in concatenated_keys}
+    return {c: None for c in concatenated_keys}
 
 
 class PerfMetricsTest(unittest.TestCase):
-  """Tests utility functions. This is not Perf Test itself."""
+    """Tests utility functions. This is not Perf Test itself."""
 
-  def test_get_column_headers(self):
+    def test_get_column_headers(self):
+        @dataclasses.dataclass
+        class Example:
+            # each string = concatenated keys of the row object
+            row_keysets: list[str]
+            # concatenated headers
+            expected_headers: str
 
-    @dataclasses.dataclass
-    class Example:
-      # each string = concatenated keys of the row object
-      row_keysets: list[str]
-      # concatenated headers
-      expected_headers: str
+        examples: list[Example] = [
+            Example(["a"], "a"),
+            Example(["ac", "bd"], "abcd"),
+            Example(["abe", "cde"], "abcde"),
+            Example(["ab", "ba"], "ab"),
+            Example(["abcde", "edcba"], "abcde"),
+            Example(["ac", "abc"], "abc"),
+        ]
+        for e in examples:
+            rows = [to_row(kz) for kz in e.row_keysets]
+            expected_headers = [*e.expected_headers]
+            with self.subTest(rows=rows, expected_headers=expected_headers):
+                self.assertEqual(
+                    _get_column_headers(rows, allow_cycles=True), expected_headers
+                )
 
-    examples: list[Example] = [
-      Example(['a'], 'a'),
-      Example(['ac', 'bd'], 'abcd'),
-      Example(['abe', 'cde'], 'abcde'),
-      Example(['ab', 'ba'], 'ab'),
-      Example(['abcde', 'edcba'], 'abcde'),
-      Example(['ac', 'abc'], 'abc')
-    ]
-    for e in examples:
-      rows = [to_row(kz) for kz in e.row_keysets]
-      expected_headers = [*e.expected_headers]
-      with self.subTest(rows=rows, expected_headers=expected_headers):
-        self.assertEqual(_get_column_headers(rows, allow_cycles=True),
-                         expected_headers)
-
-  def test_cycles(self):
-    examples = [
-      (['ab', 'ba'], 'a->b->a'),
-      (['abcd', 'db'], 'b->c->d->b')
-    ]
-    for (e, cycle) in examples:
-      rows = [to_row(kz) for kz in e]
-      with self.subTest(rows=rows, cycle=cycle):
-        with self.assertRaisesRegex(ValueError,
-                                    f'event ordering has a cycle {cycle}'):
-          _get_column_headers(rows, allow_cycles=False)
+    def test_cycles(self):
+        examples = [(["ab", "ba"], "a->b->a"), (["abcd", "db"], "b->c->d->b")]
+        for e, cycle in examples:
+            rows = [to_row(kz) for kz in e]
+            with self.subTest(rows=rows, cycle=cycle):
+                with self.assertRaisesRegex(
+                    ValueError, f"event ordering has a cycle {cycle}"
+                ):
+                    _get_column_headers(rows, allow_cycles=False)
 
 
-if __name__ == '__main__':
-  unittest.main()
+if __name__ == "__main__":
+    unittest.main()

@@ -47,7 +47,7 @@ _java_aidl_gen_aspect = aspect(
             allow_files = True,
             executable = True,
             cfg = "exec",
-            default = Label("//prebuilts/build-tools:linux-x86/bin/aidl"),
+            default = Label("//system/tools/aidl"),
         ),
     },
     toolchains = ["@bazel_tools//tools/jdk:toolchain_type"],

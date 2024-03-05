@@ -21,6 +21,7 @@ filegroup(
 py_binary(
     name = "collect",
     srcs = ["collect.py"],
+    imports = ["."],
     python_version = "PY3",
 )
 

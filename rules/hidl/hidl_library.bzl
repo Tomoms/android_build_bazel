@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@bazel_skylib//lib:paths.bzl", "paths")
+load("//build/bazel/rules/hidl:hidl_package_root.bzl", "HidlPackageRoot")
 
 HidlInfo = provider(fields = [
     "srcs",
@@ -20,8 +20,6 @@ HidlInfo = provider(fields = [
     "transitive_roots",
     "transitive_root_interface_files",
     "fq_name",
-    "root",
-    "root_interface_file",
 ])
 
 def _hidl_library_rule_impl(ctx):
@@ -34,7 +32,10 @@ def _hidl_library_rule_impl(ctx):
         transitive_root_interface_files.append(dep[HidlInfo].transitive_root_interface_files)
         transitive_roots.append(dep[HidlInfo].transitive_roots)
 
-    root_interface_path = ctx.file.root_interface_file.path
+    root = ctx.attr.root[HidlPackageRoot]
+    root_interface_files = []
+    if root.root_interface_file:
+        root_interface_files.append(root.root_interface_file)
     return [
         DefaultInfo(files = depset(ctx.files.srcs)),
         HidlInfo(
@@ -46,16 +47,14 @@ def _hidl_library_rule_impl(ctx):
             # These transitive roots will be used as -r arguments later when calling
             # hidl-gen, for example, -r android.hardware:hardware/interfaces
             transitive_roots = depset(
-                direct = [ctx.attr.root + ":" + paths.dirname(root_interface_path)],
+                direct = [root.root + ":" + root.root_path],
                 transitive = transitive_roots,
             ),
             transitive_root_interface_files = depset(
-                direct = [ctx.file.root_interface_file],
+                direct = root_interface_files,
                 transitive = transitive_root_interface_files,
             ),
             fq_name = ctx.attr.fq_name,
-            root = ctx.attr.root,
-            root_interface_file = ctx.attr.root_interface_file,
         ),
     ]
 
@@ -70,8 +69,7 @@ hidl_library = rule(
             doc = "hidl_interface targets that this one depends on",
         ),
         "fq_name": attr.string(),
-        "root": attr.string(),
-        "root_interface_file": attr.label(allow_single_file = ["current.txt"]),
+        "root": attr.label(),
     },
     provides = [HidlInfo],
 )

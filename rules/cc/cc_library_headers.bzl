@@ -12,31 +12,43 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load(":cc_library_static.bzl", "cc_library_static")
+"""cc_library_headers is a headers only cc library."""
 
-def cc_library_headers(
-        name,
-        deps = [],
-        hdrs = [],
-        export_includes = [],
-        export_absolute_includes = [],
-        export_system_includes = [],
-        native_bridge_supported = False,  # TODO: not supported yet.
-        sdk_version = "",
-        min_sdk_version = "",
-        **kwargs):
-    "Bazel macro to correspond with the cc_library_headers Soong module."
+load(":cc_constants.bzl", "constants")
+load(":cc_library_common.bzl", "check_absolute_include_dirs_disabled", "create_ccinfo_for_includes")
 
-    cc_library_static(
-        name = name,
-        deps = deps,
-        export_includes = export_includes,
-        export_absolute_includes = export_absolute_includes,
-        export_system_includes = export_system_includes,
-        hdrs = hdrs,
-        native_bridge_supported = native_bridge_supported,
-        stl = "none",
-        sdk_version = sdk_version,
-        min_sdk_version = min_sdk_version,
-        **kwargs
+def _cc_headers_impl(ctx):
+    check_absolute_include_dirs_disabled(
+        ctx.label.package,
+        ctx.attr.export_absolute_includes,
     )
+
+    return [
+        create_ccinfo_for_includes(
+            ctx,
+            hdrs = ctx.files.hdrs,
+            includes = ctx.attr.export_includes,
+            absolute_includes = ctx.attr.export_absolute_includes,
+            system_includes = ctx.attr.export_system_includes,
+            deps = ctx.attr.deps,
+        ),
+        cc_common.CcSharedLibraryHintInfo(
+            attributes = [],
+        ),
+    ]
+
+cc_library_headers = rule(
+    implementation = _cc_headers_impl,
+    attrs = {
+        "export_absolute_includes": attr.string_list(doc = "List of exec-root relative or absolute search paths for headers, usually passed with -I"),
+        "export_includes": attr.string_list(doc = "Package-relative list of search paths for headers, usually passed with -I"),
+        "export_system_includes": attr.string_list(doc = "Package-relative list of search paths for headers, usually passed with -isystem"),
+        "deps": attr.label_list(doc = "Re-propagates the includes obtained from these dependencies.", providers = [CcInfo]),
+        "hdrs": attr.label_list(doc = "Header files.", allow_files = constants.hdr_dot_exts),
+        "min_sdk_version": attr.string(),
+        "sdk_version": attr.string(),
+    },
+    fragments = ["cpp"],
+    provides = [CcInfo, cc_common.CcSharedLibraryHintInfo],
+    doc = "A library that contains c/c++ headers which are imported by other targets.",
+)
